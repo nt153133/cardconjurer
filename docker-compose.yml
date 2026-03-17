@@ -1,8 +1,7 @@
 services:
   cardconjurer:
-    image: nginx:stable-alpine
+    build: .
     ports:
-      - "4242:4242"
-    volumes:
-      - ./:/usr/share/nginx/html/:ro
-      - ./docker/app.conf:/etc/nginx/nginx.conf:ro
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
