@@ -17,3 +17,9 @@ Content-Type: image/png
 
 ### List art sources for dropdown (local_art + uploaded art)
 GET {{baseUrl}}/api/assets/art-sources
+
+### List uploaded set symbols
+GET {{baseUrl}}/api/assets/sources/set-symbols
+
+### List uploaded watermarks
+GET {{baseUrl}}/api/assets/sources/watermarks

@@ -10,6 +10,21 @@ public static class AssetEndpoints
     {
         var group = app.MapGroup("/api/assets");
 
+        group.MapGet("/sources/{kind}", (string kind, IOptions<AssetStorageOptions> options, IWebHostEnvironment environment) =>
+        {
+            if (!AssetKinds.IsSupported(kind))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "Unsupported kind.",
+                    supportedKinds = AssetKinds.Supported.OrderBy(value => value).ToArray()
+                });
+            }
+
+            var items = BuildUploadedSourceItems(kind, options.Value, environment);
+            return Results.Ok(items.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase));
+        });
+
         group.MapGet("/art-sources", (IOptions<AssetStorageOptions> options, IWebHostEnvironment environment) =>
         {
             var items = new List<ArtSourceItem>();
@@ -25,33 +40,15 @@ public static class AssetEndpoints
                     }
 
                     var relative = Path.GetRelativePath(localArtRoot, filePath).Replace('\\', '/');
+                    var displayName = StripHashPrefixFromFileName(Path.GetFileName(relative));
                     items.Add(new ArtSourceItem(
-                        Name: $"local_art/{relative}",
+                        Name: displayName,
                         Url: $"/local_art/{relative}",
                         Source: "local_art"));
                 }
             }
 
-            var uploadsRoot = FileSystemAssetStorageService.ResolveUploadsRoot(options.Value.UploadsRoot, environment.ContentRootPath);
-            var publicBasePath = FileSystemAssetStorageService.NormalizePublicBasePath(options.Value.PublicBasePath);
-            var uploadedArtRoot = Path.Combine(uploadsRoot, AssetKinds.Art);
-            if (Directory.Exists(uploadedArtRoot))
-            {
-                foreach (var filePath in Directory.EnumerateFiles(uploadedArtRoot, "*", SearchOption.AllDirectories))
-                {
-                    if (!IsImageFile(filePath))
-                    {
-                        continue;
-                    }
-
-                    var relative = Path.GetRelativePath(uploadsRoot, filePath).Replace('\\', '/');
-                    var displayName = StripHashPrefixFromPath(relative);
-                    items.Add(new ArtSourceItem(
-                        Name: $"uploaded/{displayName}",
-                        Url: $"{publicBasePath}/{relative}",
-                        Source: "uploaded"));
-                }
-            }
+            items.AddRange(BuildUploadedSourceItems(AssetKinds.Art, options.Value, environment));
 
             return Results.Ok(items.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase));
         });
@@ -108,27 +105,48 @@ public static class AssetEndpoints
         return extension is ".png" or ".jpg" or ".jpeg" or ".webp" or ".bmp" or ".svg" or ".gif";
     }
 
-    private static string StripHashPrefixFromPath(string relativePath)
+    private static List<ArtSourceItem> BuildUploadedSourceItems(string kind, AssetStorageOptions options, IWebHostEnvironment environment)
     {
-        var normalized = relativePath.Replace('\\', '/');
-        var segments = normalized.Split('/').ToList();
-        if (segments.Count == 0)
+        var items = new List<ArtSourceItem>();
+        var uploadsRoot = FileSystemAssetStorageService.ResolveUploadsRoot(options.UploadsRoot, environment.ContentRootPath);
+        var publicBasePath = FileSystemAssetStorageService.NormalizePublicBasePath(options.PublicBasePath);
+        var kindRoot = Path.Combine(uploadsRoot, kind);
+        if (!Directory.Exists(kindRoot))
         {
-            return normalized;
+            return items;
         }
 
-        var fileName = segments[^1];
+        foreach (var filePath in Directory.EnumerateFiles(kindRoot, "*", SearchOption.AllDirectories))
+        {
+            if (!IsImageFile(filePath))
+            {
+                continue;
+            }
+
+            var relative = Path.GetRelativePath(uploadsRoot, filePath).Replace('\\', '/');
+            var displayName = StripHashPrefixFromFileName(Path.GetFileName(relative));
+            items.Add(new ArtSourceItem(
+                Name: displayName,
+                Url: $"{publicBasePath}/{relative}",
+                Source: "uploaded"));
+        }
+
+        return items;
+    }
+
+    private static string StripHashPrefixFromFileName(string fileName)
+    {
         var separatorIndex = fileName.IndexOf('_');
         if (separatorIndex > 0)
         {
             var prefix = fileName[..separatorIndex];
             if (prefix.Length == 64 && prefix.All(IsHexChar))
             {
-                segments[^1] = fileName[(separatorIndex + 1)..];
+                return fileName[(separatorIndex + 1)..];
             }
         }
 
-        return string.Join('/', segments);
+        return fileName;
     }
 
     private static bool IsHexChar(char c)

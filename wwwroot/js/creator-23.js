@@ -3436,6 +3436,44 @@ function uploadFrameOption(imageSource) {
 	availableFrames.push(uploadedFrame);
 	loadFramePack();
 }
+async function uploadFrameFilesToServer(filesRaw) {
+	await uploadFilesToServerByKind(filesRaw, 'frames', uploadFrameOption, '', refreshFrameLibrarySelect);
+}
+async function refreshFrameLibrarySelect() {
+	const select = document.querySelector('#frame-library-select');
+	if (!select) {
+		return;
+	}
+
+	select.innerHTML = '<option value="" selected="selected">None selected</option>';
+
+	try {
+		const response = await fetch('/api/assets/sources/frames');
+		if (!response.ok) {
+			throw new Error('Failed to load frame list (' + response.status + ')');
+		}
+
+		const items = await response.json();
+		items.forEach(item => {
+			const option = document.createElement('option');
+			option.value = item.url;
+			option.innerText = item.name;
+			select.appendChild(option);
+		});
+	} catch (error) {
+		console.error('Could not load uploaded frames:', error);
+		const option = document.createElement('option');
+		option.value = '';
+		option.innerText = 'Failed to load uploaded frames';
+		select.appendChild(option);
+	}
+}
+function selectFrameLibrarySource(element) {
+	if (!element || !element.value) {
+		return;
+	}
+	uploadFrameOption(element.value);
+}
 function hsl(canvas, inputH, inputS, inputL) {
 	//adjust inputs
 	var hue = parseInt(inputH) / 360;
@@ -4680,6 +4718,9 @@ function uploadArt(imageSource, otherParams) {
 	}
 }
 async function uploadArtFilesToServer(filesRaw, otherParams = '') {
+	await uploadFilesToServerByKind(filesRaw, 'art', uploadArt, otherParams, refreshArtLibrarySelect, true);
+}
+async function uploadFilesToServerByKind(filesRaw, kind, destination, otherParams = '', refreshCallback = null, artDuplicateCheck = false) {
 	var files = ([...filesRaw]);
 	if (files.length > 9) {
 		if (!confirm('You are uploading ' + files.length + ' images. Would you like to continue?')) {
@@ -4693,13 +4734,13 @@ async function uploadArtFilesToServer(filesRaw, otherParams = '') {
 			formData.append('file', file);
 			formData.append('nameHint', file.name);
 
-			const response = await fetch('/api/assets/upload/art', {
+			const response = await fetch('/api/assets/upload/' + kind, {
 				method: 'POST',
 				body: formData
 			});
 
 			if (!response.ok) {
-				if (response.status == 409) {
+				if (artDuplicateCheck && response.status == 409) {
 					notify('This art already exists on the server (same file hash).', 5);
 					continue;
 				}
@@ -4707,22 +4748,24 @@ async function uploadArtFilesToServer(filesRaw, otherParams = '') {
 			}
 
 			const result = await response.json();
-			uploadArt(result.url, otherParams);
+			destination(result.url, otherParams);
 		} catch (error) {
-			console.error('Art upload failed:', error);
-			notify('Art upload failed. Falling back to local browser upload for this file.', 5);
+			console.error(kind + ' upload failed:', error);
+			notify('Upload failed. Falling back to local browser upload for this file.', 5);
 			var reader = new FileReader();
 			reader.onloadend = function() {
-				uploadArt(reader.result, otherParams);
+				destination(reader.result, otherParams);
 			}
 			reader.onerror = function() {
-				uploadArt('/img/blank.png', otherParams);
+				destination('/img/blank.png', otherParams);
 			}
 			reader.readAsDataURL(file);
 		}
 	}
 
-	refreshArtLibrarySelect();
+	if (refreshCallback) {
+		refreshCallback();
+	}
 }
 async function refreshArtLibrarySelect() {
 	const select = document.querySelector('#art-library-select');
@@ -4954,6 +4997,44 @@ function uploadSetSymbol(imageSource, otherParams) {
 		};
 	}
 }
+async function uploadSetSymbolFilesToServer(filesRaw, otherParams = 'resetSetSymbol') {
+	await uploadFilesToServerByKind(filesRaw, 'set-symbols', uploadSetSymbol, otherParams, refreshSetSymbolLibrarySelect);
+}
+async function refreshSetSymbolLibrarySelect() {
+	const select = document.querySelector('#set-symbol-library-select');
+	if (!select) {
+		return;
+	}
+
+	select.innerHTML = '<option value="" selected="selected">None selected</option>';
+
+	try {
+		const response = await fetch('/api/assets/sources/set-symbols');
+		if (!response.ok) {
+			throw new Error('Failed to load set symbol list (' + response.status + ')');
+		}
+
+		const items = await response.json();
+		items.forEach(item => {
+			const option = document.createElement('option');
+			option.value = item.url;
+			option.innerText = item.name;
+			select.appendChild(option);
+		});
+	} catch (error) {
+		console.error('Could not load uploaded set symbols:', error);
+		const option = document.createElement('option');
+		option.value = '';
+		option.innerText = 'Failed to load uploaded set symbols';
+		select.appendChild(option);
+	}
+}
+function selectSetSymbolLibrarySource(element) {
+	if (!element || !element.value) {
+		return;
+	}
+	uploadSetSymbol(element.value, 'resetSetSymbol');
+}
 function setSymbolEdited() {
 	card.setSymbolSource = setSymbol.src;
 	if (document.querySelector('#lockSetSymbolURL').checked) {
@@ -5044,6 +5125,44 @@ function uploadWatermark(imageSource, otherParams) {
 			watermark.onload = watermarkEdited;
 		};
 	}
+}
+async function uploadWatermarkFilesToServer(filesRaw, otherParams = 'resetWatermark') {
+	await uploadFilesToServerByKind(filesRaw, 'watermarks', uploadWatermark, otherParams, refreshWatermarkLibrarySelect);
+}
+async function refreshWatermarkLibrarySelect() {
+	const select = document.querySelector('#watermark-library-select');
+	if (!select) {
+		return;
+	}
+
+	select.innerHTML = '<option value="" selected="selected">None selected</option>';
+
+	try {
+		const response = await fetch('/api/assets/sources/watermarks');
+		if (!response.ok) {
+			throw new Error('Failed to load watermark list (' + response.status + ')');
+		}
+
+		const items = await response.json();
+		items.forEach(item => {
+			const option = document.createElement('option');
+			option.value = item.url;
+			option.innerText = item.name;
+			select.appendChild(option);
+		});
+	} catch (error) {
+		console.error('Could not load uploaded watermarks:', error);
+		const option = document.createElement('option');
+		option.value = '';
+		option.innerText = 'Failed to load uploaded watermarks';
+		select.appendChild(option);
+	}
+}
+function selectWatermarkLibrarySource(element) {
+	if (!element || !element.value) {
+		return;
+	}
+	uploadWatermark(element.value, 'resetWatermark');
 }
 function watermarkLeftColor(c) {
 	card.watermarkLeft = c;
@@ -7287,3 +7406,6 @@ loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
 loadAvailableCards();
 initDraggableArt();
 refreshArtLibrarySelect();
+refreshFrameLibrarySelect();
+refreshSetSymbolLibrarySelect();
+refreshWatermarkLibrarySelect();

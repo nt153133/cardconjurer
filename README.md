@@ -45,6 +45,7 @@ The app can now store uploaded user assets on disk under a configurable folder a
 - `POST /api/assets/upload/{kind}` using `multipart/form-data`
 - `file` form field is required
 - Supported `{kind}` values: `art`, `frames`, `set-symbols`, `watermarks`, `misc`
+- `GET /api/assets/sources/{kind}` lists uploaded files for that kind (used by set symbol and watermark dropdowns)
 - `GET /api/assets/art-sources` lists both `wwwroot/local_art` files and uploaded `art` files for UI dropdown selection
 
 Art uploads are de-duplicated by file hash (SHA-256):

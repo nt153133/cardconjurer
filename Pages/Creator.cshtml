@@ -185,10 +185,17 @@
 							<div class='input-grid'>
 								<div class='padding drop-area'>
 						            <h5 class='margin-bottom padding input-description'>Drag and drop</h5>
-						            <input type='file' multiple accept='.png, .svg, .jpg, .jpeg, .bmp, .webp' placeholder='File Upload' class='input' oninput='uploadFiles(event.target.files, uploadFrameOption);' data-dropFunction='uploadFrameOption' data-otherParams=''>
+									            <input type='file' multiple accept='.png, .svg, .jpg, .jpeg, .bmp, .webp' placeholder='File Upload' class='input' oninput='uploadFrameFilesToServer(event.target.files);' data-dropFunction='uploadFrameFilesToServer' data-otherParams=''>
 						        </div>
 						        <div>
 									<input type='url' placeholder='Via URL' class='input' onchange='imageURL(this.value, uploadFrameOption);'>
+												<h5 class='padding input-description'>Or choose uploaded custom frames</h5>
+												<div class='input-grid margin-bottom'>
+													<select id='frame-library-select' class='input' onchange='selectFrameLibrarySource(this);' aria-label='Select uploaded frame image'>
+														<option value='' selected='selected'>Loading uploaded frames...</option>
+													</select>
+													<button class='input' onclick='refreshFrameLibrarySelect();'>Refresh List</button>
+												</div>
 								</div>
 							</div>
 						</div>
@@ -384,10 +391,17 @@
 							<div class='input-grid margin-bottom'>
 								<div class='padding drop-area'>
 						            <h5 class='margin-bottom padding input-description'>Drag and drop</h5>
-						            <input type='file' multiple accept='.png, .svg, .jpg, .jpeg, .bmp, .webp' placeholder='File Upload' class='input' oninput='uploadFiles(event.target.files, uploadSetSymbol, "resetSetSymbol");' data-dropFunction='uploadSetSymbol' data-otherParams='resetSetSymbol'>
+									            <input type='file' multiple accept='.png, .svg, .jpg, .jpeg, .bmp, .webp' placeholder='File Upload' class='input' oninput='uploadSetSymbolFilesToServer(event.target.files, "resetSetSymbol");' data-dropFunction='uploadSetSymbolFilesToServer' data-otherParams='resetSetSymbol'>
 						        </div>
 						        <div>
 									<input type='url' placeholder='Via URL' class='input' onchange='imageURL(this.value, uploadSetSymbol, "resetSetSymbol");'>
+												<h5 class='padding input-description'>Or choose uploaded set symbols</h5>
+												<div class='input-grid margin-bottom'>
+													<select id='set-symbol-library-select' class='input' onchange='selectSetSymbolLibrarySource(this);' aria-label='Select uploaded set symbol'>
+														<option value='' selected='selected'>Loading uploaded symbols...</option>
+													</select>
+													<button class='input' onclick='refreshSetSymbolLibrarySelect();'>Refresh List</button>
+												</div>
 								</div>
 							</div>
 							<h5 class='margin-bottom padding input-description'>Or enter a set code/rarity</h5>
@@ -454,10 +468,17 @@
 							<div class='input-grid'>
 								<div class='padding drop-area'>
 						            <h5 class='margin-bottom padding input-description'>Drag and drop</h5>
-						            <input type='file' multiple accept='.png, .svg, .jpg, .jpeg, .bmp, .webp' placeholder='File Upload' class='input' oninput='uploadFiles(event.target.files, uploadWatermark, "resetWatermark");' data-dropFunction='uploadWatermark' data-otherParams='resetWatermark'>
+									            <input type='file' multiple accept='.png, .svg, .jpg, .jpeg, .bmp, .webp' placeholder='File Upload' class='input' oninput='uploadWatermarkFilesToServer(event.target.files, "resetWatermark");' data-dropFunction='uploadWatermarkFilesToServer' data-otherParams='resetWatermark'>
 						        </div>
 						        <div>
 									<input type='url' placeholder='Via URL' class='input margin-bottom' onchange='imageURL(this.value, uploadWatermark, "resetWatermark");'>
+												<h5 class='padding input-description'>Or choose uploaded watermarks</h5>
+												<div class='input-grid margin-bottom'>
+													<select id='watermark-library-select' class='input' onchange='selectWatermarkLibrarySource(this);' aria-label='Select uploaded watermark'>
+														<option value='' selected='selected'>Loading uploaded watermarks...</option>
+													</select>
+													<button class='input' onclick='refreshWatermarkLibrarySelect();'>Refresh List</button>
+												</div>
 									<input type='text' placeholder='Via Set Code' class='input' onchange='getSetSymbolWatermark(this.value);'>
 								</div>
 							</div>

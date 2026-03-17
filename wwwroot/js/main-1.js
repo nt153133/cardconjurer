@@ -66,7 +66,7 @@ function dropDrop(e) {
 	e.target.closest('.drop-area').classList.remove('hover');
 	destination = window[e.target.closest('.drop-area')?.querySelector("input").getAttribute('data-dropFunction')];
 	otherParams = e.target.closest('.drop-area')?.querySelector("input").getAttribute('data-otherParams');
-	if (destination && destination.name == 'uploadArtFilesToServer') {
+	if (destination && ['uploadArtFilesToServer', 'uploadFrameFilesToServer', 'uploadSetSymbolFilesToServer', 'uploadWatermarkFilesToServer'].includes(destination.name)) {
 		destination(e.dataTransfer.files, otherParams);
 	} else {
 		uploadFiles(e.dataTransfer.files, destination, otherParams);
