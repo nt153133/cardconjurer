@@ -4679,6 +4679,86 @@ function uploadArt(imageSource, otherParams) {
 		};
 	}
 }
+async function uploadArtFilesToServer(filesRaw, otherParams = '') {
+	var files = ([...filesRaw]);
+	if (files.length > 9) {
+		if (!confirm('You are uploading ' + files.length + ' images. Would you like to continue?')) {
+			return;
+		}
+	}
+
+	for (const file of files) {
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+			formData.append('nameHint', file.name);
+
+			const response = await fetch('/api/assets/upload/art', {
+				method: 'POST',
+				body: formData
+			});
+
+			if (!response.ok) {
+				if (response.status == 409) {
+					notify('This art already exists on the server (same file hash).', 5);
+					continue;
+				}
+				throw new Error('Upload failed with status ' + response.status);
+			}
+
+			const result = await response.json();
+			uploadArt(result.url, otherParams);
+		} catch (error) {
+			console.error('Art upload failed:', error);
+			notify('Art upload failed. Falling back to local browser upload for this file.', 5);
+			var reader = new FileReader();
+			reader.onloadend = function() {
+				uploadArt(reader.result, otherParams);
+			}
+			reader.onerror = function() {
+				uploadArt('/img/blank.png', otherParams);
+			}
+			reader.readAsDataURL(file);
+		}
+	}
+
+	refreshArtLibrarySelect();
+}
+async function refreshArtLibrarySelect() {
+	const select = document.querySelector('#art-library-select');
+	if (!select) {
+		return;
+	}
+
+	select.innerHTML = '<option value="" selected="selected">None selected</option>';
+
+	try {
+		const response = await fetch('/api/assets/art-sources');
+		if (!response.ok) {
+			throw new Error('Failed to load art list (' + response.status + ')');
+		}
+
+		const items = await response.json();
+		items.forEach(item => {
+			const option = document.createElement('option');
+			option.value = item.url;
+			option.innerText = item.name;
+			select.appendChild(option);
+		});
+	} catch (error) {
+		console.error('Could not load art sources:', error);
+		const option = document.createElement('option');
+		option.value = '';
+		option.innerText = 'Failed to load saved art list';
+		select.appendChild(option);
+	}
+}
+function selectArtLibrarySource(element) {
+	if (!element || !element.value) {
+		return;
+	}
+	uploadArt(element.value, document.querySelector('#art-update-autofit').checked ? 'autoFit' : '');
+}
 async function pasteArt() {
   try {
     const clipboardItems = await navigator.clipboard.read();
@@ -7206,3 +7286,4 @@ loadScript('/js/frames/groupStandard-3.js');
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
 loadAvailableCards();
 initDraggableArt();
+refreshArtLibrarySelect();

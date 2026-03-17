@@ -38,6 +38,30 @@ For future server-side card storage (while keeping localStorage), there is also:
 
 That endpoint returns a versioned envelope (`schemaVersion`) with raw client JSON and normalized import data, so a persistence layer can be added later without changing the client payload shape.
 
+### Asset Upload API (server-side storage)
+
+The app can now store uploaded user assets on disk under a configurable folder and serve them back over HTTP.
+
+- `POST /api/assets/upload/{kind}` using `multipart/form-data`
+- `file` form field is required
+- Supported `{kind}` values: `art`, `frames`, `set-symbols`, `watermarks`, `misc`
+- `GET /api/assets/art-sources` lists both `wwwroot/local_art` files and uploaded `art` files for UI dropdown selection
+
+Art uploads are de-duplicated by file hash (SHA-256):
+
+- if an uploaded art file hash already exists, upload returns `409 Conflict`
+- accepted art files are stored as `hash_(originalFilename).ext`
+- the art dropdown hides the hash prefix in the display label
+
+By default, files are written under `data/uploads` and served from `/user-content`.
+
+Config keys in `appsettings.json`:
+
+- `Storage:UploadsRoot`
+- `Storage:PublicBasePath`
+
+If you run with Docker and want uploads to persist, mount your host folder to the configured uploads root path.
+
 ### Run with Docker
 
 ```bash

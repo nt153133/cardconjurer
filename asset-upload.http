@@ -1,0 +1,19 @@
+@baseUrl = http://localhost:5000
+
+### Upload an art file
+POST {{baseUrl}}/api/assets/upload/art
+Content-Type: multipart/form-data; boundary=----CardConjurerBoundary
+
+------CardConjurerBoundary
+Content-Disposition: form-data; name="nameHint"
+
+sample-art.png
+------CardConjurerBoundary
+Content-Disposition: form-data; name="file"; filename="sample-art.png"
+Content-Type: image/png
+
+< ./sample-art.png
+------CardConjurerBoundary--
+
+### List art sources for dropdown (local_art + uploaded art)
+GET {{baseUrl}}/api/assets/art-sources
