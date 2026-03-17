@@ -8,5 +8,5 @@
 "theme_color":"#080808",
 "background_color":"#080808",
 "display":"standalone",
-"start_url":"/creator/index.html"
+"start_url":"/creator"
 }
