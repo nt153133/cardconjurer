@@ -19,6 +19,25 @@ dotnet run
 
 The application will start at `http://localhost:5000` by default. Navigate to `/creator` for the Card Creator page.
 
+### Import Normalization APIs (new)
+
+Parser and import-normalization logic from `creator-23.js` now has server-side endpoints under `/api/import-normalization`:
+
+- `POST /api/import-normalization/from-text`
+- `POST /api/import-normalization/saga`
+- `POST /api/import-normalization/class`
+- `POST /api/import-normalization/roll`
+- `POST /api/import-normalization/station`
+- `POST /api/import-normalization/process-scryfall-card`
+- `POST /api/import-normalization/multi-faced`
+- `POST /api/import-normalization/layout-specific`
+
+For future server-side card storage (while keeping localStorage), there is also:
+
+- `POST /api/cards/prepare-localstorage-upload`
+
+That endpoint returns a versioned envelope (`schemaVersion`) with raw client JSON and normalized import data, so a persistence layer can be added later without changing the client payload shape.
+
 ### Run with Docker
 
 ```bash

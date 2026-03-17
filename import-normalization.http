@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:5000
+
+### Parse card text into a Scryfall-like object
+POST {{baseUrl}}/api/import-normalization/from-text
+Content-Type: application/json
+
+{
+  "text": "Shivan Dragon {4}{R}{R}\nCreature - Dragon\nFlying\n5/5"
+}
+
+### Parse saga abilities
+POST {{baseUrl}}/api/import-normalization/saga
+Content-Type: application/json
+
+{
+  "text": "(As this Saga enters and after your draw step, add a lore counter.)\nI, II - Create a 2/2 token.\nIII - Draw two cards."
+}
+
+### Prepare localStorage upload envelope for future persistence
+POST {{baseUrl}}/api/cards/prepare-localstorage-upload
+Content-Type: application/json
+
+{
+  "clientCardKey": "card_123",
+  "cardJson": {
+    "name": "Test Card",
+    "version": "normal"
+  },
+  "importedCard": {
+    "name": "Shivan Dragon",
+    "layout": "normal",
+    "lang": "en",
+    "oracle_text": "Flying",
+    "type_line": "Creature - Dragon"
+  }
+}
