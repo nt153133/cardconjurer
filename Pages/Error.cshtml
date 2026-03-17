@@ -1,0 +1,16 @@
+@page
+@model CardConjurer.Pages.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<div class='layer readable-background center'>
+    <h1>Error</h1>
+    <h3>An error occurred while processing your request.</h3>
+    @if (Model.ShowRequestId)
+    {
+        <p>
+            <strong>Request ID:</strong> <code>@Model.RequestId</code>
+        </p>
+    }
+</div>
