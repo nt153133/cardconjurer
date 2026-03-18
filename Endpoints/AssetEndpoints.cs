@@ -96,8 +96,36 @@ public static class AssetEndpoints
             }
         });
 
+        group.MapDelete("/{kind}", async (string kind, HttpRequest request, IAssetStorageService storage, CancellationToken cancellationToken) =>
+        {
+            if (!AssetKinds.IsSupported(kind))
+            {
+                return Results.BadRequest(new { error = "Unsupported kind." });
+            }
+
+            DeleteAssetRequest? body;
+            try
+            {
+                body = await request.ReadFromJsonAsync<DeleteAssetRequest>(cancellationToken);
+            }
+            catch
+            {
+                return Results.BadRequest(new { error = "Invalid JSON body." });
+            }
+
+            if (body is null || string.IsNullOrWhiteSpace(body.Url))
+            {
+                return Results.BadRequest(new { error = "Missing 'url' field." });
+            }
+
+            var deleted = await storage.DeleteByUrlAsync(kind, body.Url, cancellationToken);
+            return deleted ? Results.Ok(new { deleted = true }) : Results.NotFound(new { error = "File not found." });
+        });
+
         return app;
     }
+
+    private sealed record DeleteAssetRequest(string Url);
 
     private static bool IsImageFile(string filePath)
     {

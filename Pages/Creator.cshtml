@@ -112,6 +112,7 @@
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "watermark")'>Watermark</h3>
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "bottomInfo")'>Collector</h3>
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "import")'>Import/Save</h3>
+					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "assetlibrary"); loadAssetLibrary();'>Asset Library</h3>
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "tutorial"); loadTutorialVideo();'>Tutorial</h3>
 				</div>
 				<div id='creator-menu-sections' class='margin-bottom'>
@@ -755,6 +756,39 @@
 								<h5 class='margin-top'>Your localstorage runs out of space especially fast when you upload images directly from your computer, because the image itself has to be saved. However, if possible, uploading images via URL will save massive amounts of space, allowing you to save many more cards.</h5>
 								<h5 class='margin-top'>And if you do run out of space, don't worry! You can download all saved cards then delete all saved cards,  freeing up all 5MB of space. And when you'd like to edit the cards you previously downloaded/deleted, you can reupload them via the file upload (under "Upload previously downloaded cards").</h5>
 							</div>
+						</div>
+					</div>
+					<div id='creator-menu-assetlibrary' class='hidden'>
+						<div class='readable-background padding margin-bottom'>
+							<h5 class='margin-bottom padding input-description'>Browse and manage your uploaded images by type</h5>
+							<div class='asset-kind-tabs margin-bottom'>
+								<h3 id='asset-kind-tab-art'        class='selectable readable-background selected' onclick='switchAssetKind("art")'>Art</h3>
+								<h3 id='asset-kind-tab-frames'     class='selectable readable-background' onclick='switchAssetKind("frames")'>Frames</h3>
+								<h3 id='asset-kind-tab-set-symbols' class='selectable readable-background' onclick='switchAssetKind("set-symbols")'>Set Symbols</h3>
+								<h3 id='asset-kind-tab-watermarks' class='selectable readable-background' onclick='switchAssetKind("watermarks")'>Watermarks</h3>
+							</div>
+						</div>
+						<div class='readable-background padding margin-bottom'>
+							<h5 class='margin-bottom padding input-description'>Upload new files (multiple allowed)</h5>
+							<div class='input-grid'>
+								<div class='padding drop-area'>
+									<h5 class='margin-bottom padding input-description'>Drag and drop</h5>
+									<input id='asset-library-upload-input' type='file' multiple accept='.png, .svg, .jpg, .jpeg, .bmp, .webp' placeholder='File Upload' class='input' oninput='assetLibraryUpload(event.target.files);' data-dropFunction='assetLibraryUploadDrop' data-otherParams=''>
+								</div>
+								<div>
+									<button class='input' onclick='document.querySelector("#asset-library-upload-input").click();'>Browse files to upload</button>
+								</div>
+							</div>
+						</div>
+						<div class='readable-background padding margin-bottom'>
+							<div class='input-grid margin-bottom'>
+								<button class='input' onclick='assetLibrarySelectAll();'>Select All</button>
+								<button class='input' onclick='assetLibraryDeselectAll();'>Deselect All</button>
+								<button class='input' onclick='assetLibraryDeleteSelected();' style='color:#e06c6c;'>Delete Selected</button>
+								<button class='input' onclick='loadAssetLibrary();'>Refresh</button>
+							</div>
+							<h5 id='asset-library-status' class='padding input-description'>Loading...</h5>
+							<div id='asset-gallery' class='asset-gallery'></div>
 						</div>
 					</div>
 					<div id='creator-menu-tutorial' class='hidden'>

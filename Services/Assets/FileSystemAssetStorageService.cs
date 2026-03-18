@@ -95,6 +95,55 @@ public sealed class FileSystemAssetStorageService : IAssetStorageService
             CreatedAtUtc: createdAtUtc);
     }
 
+    public async Task<bool> DeleteByUrlAsync(string kind, string publicUrl, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(publicUrl))
+        {
+            return false;
+        }
+
+        var normalizedKind = kind.Trim().ToLowerInvariant();
+
+        // Strip public base path to get relative path within uploads root
+        var basePath = _publicBasePath.TrimEnd('/') + "/";
+        if (!publicUrl.StartsWith(basePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var relativeFromUploads = publicUrl[basePath.Length..].Replace('/', Path.DirectorySeparatorChar);
+        var absolutePath = Path.GetFullPath(Path.Combine(_uploadsRoot, relativeFromUploads));
+
+        // Guard against path traversal outside uploads root
+        if (!absolutePath.StartsWith(_uploadsRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!File.Exists(absolutePath))
+        {
+            return false;
+        }
+
+        await Task.Run(() => File.Delete(absolutePath), cancellationToken);
+
+        // Remove from art hash index if applicable
+        if (string.Equals(normalizedKind, AssetKinds.Art, StringComparison.Ordinal))
+        {
+            var fileName = Path.GetFileName(absolutePath);
+            var hash = TryReadHashPrefix(fileName);
+            if (hash is not null)
+            {
+                lock (_artHashesLock)
+                {
+                    _artHashes.Remove(hash);
+                }
+            }
+        }
+
+        return true;
+    }
+
     private void LoadExistingArtHashes()
     {
         var artRoot = Path.Combine(_uploadsRoot, AssetKinds.Art);

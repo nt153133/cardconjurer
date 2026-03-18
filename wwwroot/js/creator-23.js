@@ -7409,3 +7409,199 @@ refreshArtLibrarySelect();
 refreshFrameLibrarySelect();
 refreshSetSymbolLibrarySelect();
 refreshWatermarkLibrarySelect();
+
+// =====================
+// ASSET LIBRARY TAB
+// =====================
+var _assetLibraryKind = 'art';
+var _assetLibraryItems = [];
+var _assetLibrarySelected = new Set();
+
+function switchAssetKind(kind) {
+	_assetLibraryKind = kind;
+	_assetLibrarySelected.clear();
+	document.querySelectorAll('[id^="asset-kind-tab-"]').forEach(tab => tab.classList.remove('selected'));
+	const activeTab = document.querySelector('#asset-kind-tab-' + kind);
+	if (activeTab) { activeTab.classList.add('selected'); }
+	loadAssetLibrary();
+}
+
+async function loadAssetLibrary() {
+	const gallery = document.querySelector('#asset-gallery');
+	const status = document.querySelector('#asset-library-status');
+	if (!gallery || !status) { return; }
+	_assetLibrarySelected.clear();
+	gallery.innerHTML = '';
+	status.textContent = 'Loading...';
+
+	try {
+		const endpoint = _assetLibraryKind === 'art'
+			? '/api/assets/art-sources'
+			: '/api/assets/sources/' + _assetLibraryKind;
+		const response = await fetch(endpoint);
+		if (!response.ok) { throw new Error('HTTP ' + response.status); }
+		_assetLibraryItems = await response.json();
+	} catch (err) {
+		console.error('Asset library load failed:', err);
+		status.textContent = 'Failed to load files.';
+		return;
+	}
+
+	if (_assetLibraryItems.length === 0) {
+		status.textContent = '0 files';
+		const empty = document.createElement('p');
+		empty.className = 'asset-gallery-empty';
+		empty.textContent = 'No uploaded files yet for this type.';
+		gallery.appendChild(empty);
+		return;
+	}
+
+	status.textContent = _assetLibraryItems.length + ' file(s)';
+	_assetLibraryItems.forEach(item => gallery.appendChild(buildAssetGalleryItem(item)));
+}
+
+function buildAssetGalleryItem(item) {
+	const cell = document.createElement('div');
+	cell.className = 'asset-gallery-item';
+	cell.onclick = () => toggleAssetSelection(item.url, cell);
+
+	const check = document.createElement('input');
+	check.type = 'checkbox';
+	check.className = 'asset-check';
+	check.onclick = (e) => { e.stopPropagation(); toggleAssetSelection(item.url, cell); };
+	cell.appendChild(check);
+
+	const img = document.createElement('img');
+	img.src = item.url;
+	img.alt = item.name;
+	img.loading = 'lazy';
+	img.onerror = function() {
+		this.style.opacity = '0.3';
+		this.src = '/img/blank.png';
+	};
+	cell.appendChild(img);
+
+	const name = document.createElement('span');
+	name.className = 'asset-name';
+	name.textContent = item.name;
+	cell.appendChild(name);
+
+	return cell;
+}
+
+function toggleAssetSelection(url, cell) {
+	const check = cell.querySelector('.asset-check');
+	if (_assetLibrarySelected.has(url)) {
+		_assetLibrarySelected.delete(url);
+		cell.classList.remove('selected');
+		if (check) { check.checked = false; }
+	} else {
+		_assetLibrarySelected.add(url);
+		cell.classList.add('selected');
+		if (check) { check.checked = true; }
+	}
+	const status = document.querySelector('#asset-library-status');
+	if (status) {
+		status.textContent = _assetLibraryItems.length + ' file(s), ' + _assetLibrarySelected.size + ' selected';
+	}
+}
+
+function assetLibrarySelectAll() {
+	_assetLibrarySelected.clear();
+	document.querySelectorAll('#asset-gallery .asset-gallery-item').forEach((cell, i) => {
+		const url = _assetLibraryItems[i]?.url;
+		if (url) { _assetLibrarySelected.add(url); }
+		cell.classList.add('selected');
+		const check = cell.querySelector('.asset-check');
+		if (check) { check.checked = true; }
+	});
+	const status = document.querySelector('#asset-library-status');
+	if (status) { status.textContent = _assetLibraryItems.length + ' file(s), ' + _assetLibrarySelected.size + ' selected'; }
+}
+
+function assetLibraryDeselectAll() {
+	_assetLibrarySelected.clear();
+	document.querySelectorAll('#asset-gallery .asset-gallery-item').forEach(cell => {
+		cell.classList.remove('selected');
+		const check = cell.querySelector('.asset-check');
+		if (check) { check.checked = false; }
+	});
+	const status = document.querySelector('#asset-library-status');
+	if (status) { status.textContent = _assetLibraryItems.length + ' file(s)'; }
+}
+
+async function assetLibraryDeleteSelected() {
+	if (_assetLibrarySelected.size === 0) {
+		notify('No files selected.', 3);
+		return;
+	}
+	if (!confirm('Delete ' + _assetLibrarySelected.size + ' selected file(s)? This cannot be undone.')) { return; }
+
+	const urls = [..._assetLibrarySelected];
+	let deleted = 0;
+	let failed = 0;
+	for (const url of urls) {
+		try {
+			const response = await fetch('/api/assets/' + _assetLibraryKind, {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ url })
+			});
+			if (response.ok || response.status === 404) { deleted++; } else { failed++; }
+		} catch (err) {
+			console.error('Delete failed for', url, err);
+			failed++;
+		}
+	}
+
+	notify(deleted + ' file(s) deleted' + (failed > 0 ? ', ' + failed + ' failed.' : '.'), 4);
+	await loadAssetLibrary();
+
+	if (_assetLibraryKind === 'art') { refreshArtLibrarySelect(); }
+	else if (_assetLibraryKind === 'frames') { refreshFrameLibrarySelect(); }
+	else if (_assetLibraryKind === 'set-symbols') { refreshSetSymbolLibrarySelect(); }
+	else if (_assetLibraryKind === 'watermarks') { refreshWatermarkLibrarySelect(); }
+}
+
+async function assetLibraryUpload(filesRaw) {
+	if (!filesRaw || filesRaw.length === 0) { return; }
+	const files = [...filesRaw];
+	const isDuplicate = _assetLibraryKind === 'art';
+	let uploaded = 0;
+	let dupes = 0;
+	let failed = 0;
+
+	for (const file of files) {
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+			formData.append('nameHint', file.name);
+			const response = await fetch('/api/assets/upload/' + _assetLibraryKind, {
+				method: 'POST',
+				body: formData
+			});
+			if (response.ok) { uploaded++; }
+			else if (isDuplicate && response.status === 409) { dupes++; }
+			else { throw new Error('HTTP ' + response.status); }
+		} catch (err) {
+			console.error('Upload failed:', err);
+			failed++;
+		}
+	}
+
+	const parts = [];
+	if (uploaded > 0) { parts.push(uploaded + ' uploaded'); }
+	if (dupes > 0)    { parts.push(dupes + ' duplicate(s) skipped'); }
+	if (failed > 0)   { parts.push(failed + ' failed'); }
+	notify(parts.join(', ') + '.', 4);
+	await loadAssetLibrary();
+
+	if (_assetLibraryKind === 'art') { refreshArtLibrarySelect(); }
+	else if (_assetLibraryKind === 'frames') { refreshFrameLibrarySelect(); }
+	else if (_assetLibraryKind === 'set-symbols') { refreshSetSymbolLibrarySelect(); }
+	else if (_assetLibraryKind === 'watermarks') { refreshWatermarkLibrarySelect(); }
+}
+
+function assetLibraryUploadDrop(filesRaw) {
+	assetLibraryUpload(filesRaw);
+}

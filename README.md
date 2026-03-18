@@ -47,12 +47,28 @@ The app can now store uploaded user assets on disk under a configurable folder a
 - Supported `{kind}` values: `art`, `frames`, `set-symbols`, `watermarks`, `misc`
 - `GET /api/assets/sources/{kind}` lists uploaded files for that kind (used by set symbol and watermark dropdowns)
 - `GET /api/assets/art-sources` lists both `wwwroot/local_art` files and uploaded `art` files for UI dropdown selection
+- `DELETE /api/assets/{kind}` deletes an uploaded file by public URL (JSON body: `{ "url": "..." }`)
+
+Creator-side uploads now use server storage for:
+
+- Art
+- Custom frame images
+- Set symbols
+- Watermarks
+
+The Creator now also includes an **Asset Library** tab for uploaded images with:
+
+- type filtering (`art`, `frames`, `set-symbols`, `watermarks`)
+- multi-file upload
+- thumbnail browsing
+- select all / deselect all
+- batch delete
 
 Art uploads are de-duplicated by file hash (SHA-256):
 
 - if an uploaded art file hash already exists, upload returns `409 Conflict`
 - accepted art files are stored as `hash_(originalFilename).ext`
-- the art dropdown hides the hash prefix in the display label
+- custom-image dropdowns display concise filenames (hash/path prefixes are hidden)
 
 By default, files are written under `data/uploads` and served from `/user-content`.
 
