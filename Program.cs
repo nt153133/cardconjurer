@@ -7,47 +7,74 @@ using CardConjurer.Services.CardImage;
 using CardConjurer.Services.ImportNormalization;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
+using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-builder.Services.AddRazorPages();
-builder.Services.AddSingleton<ICardImportNormalizationService, CardImportNormalizationService>();
-builder.Services.Configure<AssetStorageOptions>(builder.Configuration.GetSection("Storage"));
-builder.Services.AddSingleton<IAssetStorageService, FileSystemAssetStorageService>();
-builder.Services.Configure<CardStorageOptions>(builder.Configuration.GetSection("Cards"));
-builder.Services.AddSingleton<ICardStorageService, FileSystemCardStorageService>();
-builder.Services.AddSingleton<ICardImageService, CardImageService>();
-
-var app = builder.Build();
-
-var assetStorageOptions = app.Services.GetRequiredService<IOptions<AssetStorageOptions>>().Value;
-var uploadsRoot = FileSystemAssetStorageService.ResolveUploadsRoot(assetStorageOptions.UploadsRoot, app.Environment.ContentRootPath);
-var publicUploadsBasePath = FileSystemAssetStorageService.NormalizePublicBasePath(assetStorageOptions.PublicBasePath);
-
-Directory.CreateDirectory(uploadsRoot);
-foreach (var kind in AssetKinds.Supported)
+try
 {
-    Directory.CreateDirectory(Path.Combine(uploadsRoot, kind));
+    Log.Information("Starting CardConjurer");
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext());
+
+    builder.Services.AddRazorPages();
+    builder.Services.AddSingleton<ICardImportNormalizationService, CardImportNormalizationService>();
+    builder.Services.Configure<AssetStorageOptions>(builder.Configuration.GetSection("Storage"));
+    builder.Services.AddSingleton<IAssetStorageService, FileSystemAssetStorageService>();
+    builder.Services.Configure<CardStorageOptions>(builder.Configuration.GetSection("Cards"));
+    builder.Services.AddSingleton<ICardStorageService, FileSystemCardStorageService>();
+    builder.Services.AddSingleton<ICardImageService, CardImageService>();
+
+    var app = builder.Build();
+
+    var assetStorageOptions = app.Services.GetRequiredService<IOptions<AssetStorageOptions>>().Value;
+    var uploadsRoot = FileSystemAssetStorageService.ResolveUploadsRoot(assetStorageOptions.UploadsRoot, app.Environment.ContentRootPath);
+    var publicUploadsBasePath = FileSystemAssetStorageService.NormalizePublicBasePath(assetStorageOptions.PublicBasePath);
+
+    Directory.CreateDirectory(uploadsRoot);
+    foreach (var kind in AssetKinds.Supported)
+    {
+        Directory.CreateDirectory(Path.Combine(uploadsRoot, kind));
+    }
+
+    Log.Information("Using uploads root {UploadsRoot} and public path {PublicUploadsBasePath}", uploadsRoot, publicUploadsBasePath);
+
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseExceptionHandler("/Error");
+    }
+
+    app.UseStaticFiles();
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(uploadsRoot),
+        RequestPath = publicUploadsBasePath
+    });
+
+    app.UseSerilogRequestLogging();
+
+    app.UseRouting();
+
+    app.MapRazorPages();
+    app.MapImportNormalizationEndpoints();
+    app.MapAssetEndpoints();
+    app.MapCardEndpoints();
+    app.MapCardImageEndpoints();
+
+    app.Run();
 }
-
-if (!app.Environment.IsDevelopment())
+catch (Exception ex)
 {
-    app.UseExceptionHandler("/Error");
+    Log.Fatal(ex, "CardConjurer terminated unexpectedly");
 }
-
-app.UseStaticFiles();
-app.UseStaticFiles(new StaticFileOptions
+finally
 {
-    FileProvider = new PhysicalFileProvider(uploadsRoot),
-    RequestPath = publicUploadsBasePath
-});
-
-app.UseRouting();
-
-app.MapRazorPages();
-app.MapImportNormalizationEndpoints();
-app.MapAssetEndpoints();
-app.MapCardEndpoints();
-app.MapCardImageEndpoints();
-
-app.Run();
+    Log.CloseAndFlush();
+}

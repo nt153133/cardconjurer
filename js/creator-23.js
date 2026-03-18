@@ -305,6 +305,55 @@ function scaleY(input) {
 function scaleHeight(input) {
 	return Math.round(input * card.height);
 }
+
+// ── Canvas Size Settings ──────────────────────────────────────────────────────
+function applyStandardCardSize() {
+	var wEl = document.querySelector('#settings-card-width');
+	var hEl = document.querySelector('#settings-card-height');
+	var w = parseInt(wEl && wEl.value) || getStandardWidth();
+	var h = parseInt(hEl && hEl.value) || getStandardHeight();
+	if (w < 100 || h < 100) { notify('Width and height must be at least 100 px.', 4); return; }
+	localStorage.setItem('standardCardWidth',  w);
+	localStorage.setItem('standardCardHeight', h);
+	card.width   = w;
+	card.height  = h;
+	card.marginX = 0;
+	card.marginY = 0;
+	canvasList.forEach(name => sizeCanvas(name));
+	drawFrames();
+	drawTextBuffer();
+	bottomInfoEdited();
+	watermarkEdited();
+	notify('Canvas size set to ' + w + ' × ' + h + ' px.', 3);
+}
+
+function resetStandardCardSize() {
+	localStorage.setItem('standardCardWidth',  2010);
+	localStorage.setItem('standardCardHeight', 2814);
+	var wEl = document.querySelector('#settings-card-width');
+	var hEl = document.querySelector('#settings-card-height');
+	if (wEl) { wEl.value = 2010; }
+	if (hEl) { hEl.value = 2814; }
+	applyStandardCardSize();
+}
+
+function saveCardSizeSettings() {
+	var cb = document.querySelector('#settings-load-override-size');
+	localStorage.setItem('loadCardUseStandardSize', cb ? cb.checked : false);
+}
+
+function initCardSizeSettings() {
+	var w  = localStorage.getItem('standardCardWidth')  || 2010;
+	var h  = localStorage.getItem('standardCardHeight') || 2814;
+	var wEl = document.querySelector('#settings-card-width');
+	var hEl = document.querySelector('#settings-card-height');
+	var cb  = document.querySelector('#settings-load-override-size');
+	if (wEl) { wEl.value = w; }
+	if (hEl) { hEl.value = h; }
+	if (cb)  { cb.checked = localStorage.getItem('loadCardUseStandardSize') === 'true'; }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 //Other nifty functions
 function getElementIndex(element) {
 	return Array.prototype.indexOf.call(element.parentElement.children, element);
@@ -7180,6 +7229,15 @@ async function loadCardData(cardData, label = 'selected card') {
 	card = cardData ? JSON.parse(JSON.stringify(cardData)) : null;
 	//if the card was loaded properly...
 	if (card) {
+		// Apply standard canvas size override if the setting is enabled.
+		// All card positions are stored as 0–1 fractions, so they scale
+		// proportionally with no extra work needed.
+		if (localStorage.getItem('loadCardUseStandardSize') === 'true') {
+			card.width   = getStandardWidth();
+			card.height  = getStandardHeight();
+			card.marginX = 0;
+			card.marginY = 0;
+		}
 		//load values from card into html inputs
 		document.querySelector('#info-number').value = card.infoNumber;
 		document.querySelector('#info-rarity').value = card.infoRarity;
@@ -7745,6 +7803,7 @@ refreshArtLibrarySelect();
 refreshFrameLibrarySelect();
 refreshSetSymbolLibrarySelect();
 refreshWatermarkLibrarySelect();
+initCardSizeSettings();
 
 // =====================
 // ASSET LIBRARY TAB

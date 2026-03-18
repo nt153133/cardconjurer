@@ -217,6 +217,28 @@
 								<span class='checkmark'></span>
 							</label>
 						</div>
+						<div class='readable-background padding margin-bottom'>
+							<h5 class='input-description margin-bottom'>Canvas Size</h5>
+							<h5 class='padding input-description'>Sets the pixel resolution of the card canvas. All component positions are stored proportionally, so they scale automatically.</h5>
+							<div class='input-grid margin-bottom'>
+								<div>
+									<h5 class='padding input-description'>Width (px)</h5>
+									<input id='settings-card-width' type='number' min='100' max='9999' step='1' class='input' placeholder='2010' aria-label='Card canvas width in pixels'>
+								</div>
+								<div>
+									<h5 class='padding input-description'>Height (px)</h5>
+									<input id='settings-card-height' type='number' min='100' max='9999' step='1' class='input' placeholder='2814' aria-label='Card canvas height in pixels'>
+								</div>
+							</div>
+							<div class='input-grid margin-bottom'>
+								<button class='input' onclick='applyStandardCardSize();'>Apply to Current Card</button>
+								<button class='input' onclick='resetStandardCardSize();'>Reset to Default (2010 × 2814)</button>
+							</div>
+							<label class='checkbox-container input'>Override size when loading saved cards
+								<input id='settings-load-override-size' type='checkbox' onchange='saveCardSizeSettings();'>
+								<span class='checkmark'></span>
+							</label>
+						</div>
 					</div>
 					<div id='creator-menu-text' class='hidden'>
 						<div class='readable-background padding margin-bottom'>
@@ -750,7 +772,7 @@
 							<h5 class='padding margin-bottom input-description'>Delete selected server card</h5>
 							<button class='input' onclick='deleteServerCard();'>Delete Server Card</button>
 						</div>
-						<div class='readable-background padding margin-bottom'>
+						<div class='readable-background margin-bottom'>
 							<h5 class='padding margin-bottom input-description'>Download all saved cards as a file</h5>
 							<button class='input margin-bottom' onclick='downloadSavedCards();'>Download Cards File</button>
 							<h5 class='padding margin-bottom input-description'>Download all saved card images as a zip file(can take a long time)</h5>
