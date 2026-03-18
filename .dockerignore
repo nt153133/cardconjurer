@@ -3,6 +3,13 @@ CORS.json
 *.bat
 dev/*
 
+# Large static asset trees — supplied as bind mounts at runtime
+wwwroot/img
+wwwroot/local_art
+
+# Runtime data (cards, uploads) — always a bind mount, never in the image
+data
+
 # dependencies
 /node_modules
 /.pnp

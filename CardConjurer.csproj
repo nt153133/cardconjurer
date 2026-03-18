@@ -14,6 +14,63 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="js\**" />
+    <Compile Remove="img\**" />
+    <Compile Remove="creator\**" />
+    <Compile Remove="css\**" />
+    <Compile Remove="data\**" />
+    <Compile Remove="converter\**" />
+    <Compile Remove="askurza\**" />
+    <Compile Remove="fonts\**" />
+    <Compile Remove="local_art\**" />
+    <Compile Remove="phyrexian\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Remove="js\**" />
+    <EmbeddedResource Remove="img\**" />
+    <EmbeddedResource Remove="creator\**" />
+    <EmbeddedResource Remove="css\**" />
+    <EmbeddedResource Remove="data\**" />
+    <EmbeddedResource Remove="converter\**" />
+    <EmbeddedResource Remove="askurza\**" />
+    <EmbeddedResource Remove="fonts\**" />
+    <EmbeddedResource Remove="local_art\**" />
+    <EmbeddedResource Remove="phyrexian\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="js\**" />
+    <Content Remove="img\**" />
+    <Content Remove="creator\**" />
+    <Content Remove="css\**" />
+    <Content Remove="data\**" />
+    <Content Remove="converter\**" />
+    <Content Remove="askurza\**" />
+    <Content Remove="fonts\**" />
+    <Content Remove="local_art\**" />
+    <Content Remove="phyrexian\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="js\**" />
+    <None Remove="img\**" />
+    <None Remove="creator\**" />
+    <None Remove="css\**" />
+    <None Remove="data\**" />
+    <None Remove="converter\**" />
+    <None Remove="askurza\**" />
+    <None Remove="fonts\**" />
+    <None Remove="local_art\**" />
+    <None Remove="phyrexian\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="data\cards\de456c0ea1734be983ed7dac5324b97a.json" />
+    <_ContentIncludedByDefault Remove="data\cards\dea2ac6608584d7587a565c1e8701455.json" />
+  </ItemGroup>
   <PropertyGroup>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>

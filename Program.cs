@@ -51,7 +51,21 @@ try
         app.UseExceptionHandler("/Error");
     }
 
+    // wwwroot/ is the canonical static-file root (served by default).
     app.UseStaticFiles();
+
+    // gallery/ is preserved at the project root and served at /gallery.
+    var galleryPath = Path.Combine(app.Environment.ContentRootPath, "gallery");
+    if (Directory.Exists(galleryPath))
+    {
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(galleryPath),
+            RequestPath = "/gallery"
+        });
+    }
+
+    // User-uploaded assets.
     app.UseStaticFiles(new StaticFileOptions
     {
         FileProvider = new PhysicalFileProvider(uploadsRoot),

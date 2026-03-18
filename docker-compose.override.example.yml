@@ -2,4 +2,12 @@ services:
   cardconjurer:
     container_name: cardconjurer
     volumes:
-      - /srv/storage:/srv/storage:ro
+      # ── Static assets (large, host-managed) ──────────────────────────────────
+      # Card frames, mana symbols, watermarks, etc.
+      - /srv/cardconjurer/img:/app/wwwroot/img:ro
+      # Optional local art library (leave out the line if unused)
+      - /srv/cardconjurer/local_art:/app/wwwroot/local_art
+
+      # ── Persistent server-side data ──────────────────────────────────────────
+      # Contains data/cards (saved cards) and data/uploads (user-uploaded assets)
+      - /srv/cardconjurer/data:/app/data
