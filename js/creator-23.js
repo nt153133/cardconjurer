@@ -5546,38 +5546,79 @@ function drawCard() {
 	}
 }
 //DOWNLOADING
-function downloadCard(alt = false, jpeg = false) {
+async function downloadCard(alt = false, jpeg = false) {
 	if (card.infoArtist.replace(/ /g, '') == '' && !card.artSource.includes('/img/blank.png') && !card.artZoom == 0) {
 		notify('You must credit an artist before downloading!', 5);
-	} else {
-		// Prep file information
-		var imageDataURL;
-		var imageName = getCardName();
-		if (jpeg) {
-			imageDataURL = cardCanvas.toDataURL('image/jpeg', 0.8);
-			imageName = imageName + '.jpeg';
-		} else {
-			imageDataURL = cardCanvas.toDataURL('image/png');
-			imageName = imageName + '.png';
+		return;
+	}
+
+	const format    = jpeg ? 'jpeg' : 'png';
+	const imageName = getCardName() + '.' + (jpeg ? 'jpeg' : 'png');
+
+	// Alt mode: open a live preview in a new tab — no server round-trip needed
+	if (alt) {
+		const dataURL = cardCanvas.toDataURL('image/png');
+		const newWindow = window.open('about:blank');
+		setTimeout(function () {
+			newWindow.document.body.appendChild(newWindow.document.createElement('img')).src = dataURL;
+			newWindow.document.querySelector('img').style = 'max-height:100vh;max-width:100vw;';
+			newWindow.document.body.style = 'padding:0;margin:0;text-align:center;background-color:#888;';
+			newWindow.document.title = imageName;
+		}, 0);
+		return;
+	}
+
+	try {
+		// Always send lossless PNG from the canvas. Base64 adds no quality loss —
+		// it is a pure ASCII re-encoding of the same bytes. ImageSharp re-encodes
+		// to the target format server-side, embedding card JSON as PNG iTXt / JPEG XMP metadata.
+		const imageBase64 = cardCanvas.toDataURL('image/png').split(',')[1];
+
+		// Strip non-serialisable Image objects from frames before sending
+		const cardToSend = JSON.parse(JSON.stringify(card));
+		cardToSend.frames.forEach(f => {
+			delete f.image;
+			(f.masks || []).forEach(m => delete m.image);
+		});
+
+		const response = await fetch('/api/card-image/render', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				imageBase64,
+				cardJson: cardToSend,
+				fileName: getCardName(),
+				format
+			})
+		});
+
+		if (!response.ok) {
+			throw new Error('Server render returned HTTP ' + response.status);
 		}
-		// Download image
-		if (alt) {
-			const newWindow = window.open('about:blank');
-			setTimeout(function(){
-				newWindow.document.body.appendChild(newWindow.document.createElement('img')).src = imageDataURL;
-				newWindow.document.querySelector('img').style = 'max-height: 100vh; max-width: 100vw;';
-				newWindow.document.body.style = 'padding: 0; margin: 0; text-align: center; background-color: #888;';
-				newWindow.document.title = imageName;
-			}, 0);
-		} else {
-			const downloadElement = document.createElement('a');
-			downloadElement.download = imageName;
-			downloadElement.target = '_blank';
-			downloadElement.href = imageDataURL;
-			document.body.appendChild(downloadElement);
-			downloadElement.click();
-			downloadElement.remove();
-		}
+
+		const blob = await response.blob();
+		const url  = URL.createObjectURL(blob);
+		const dl   = document.createElement('a');
+		dl.download = imageName;
+		dl.href = url;
+		document.body.appendChild(dl);
+		dl.click();
+		dl.remove();
+		URL.revokeObjectURL(url);
+
+	} catch (err) {
+		// Graceful fallback: download directly from the canvas if the server is unreachable
+		console.error('Server-side render failed, using direct canvas download:', err);
+		notify('Server render unavailable — downloading directly from canvas.', 3);
+		const dataURL = jpeg
+			? cardCanvas.toDataURL('image/jpeg', 0.8)
+			: cardCanvas.toDataURL('image/png');
+		const dl = document.createElement('a');
+		dl.download = imageName;
+		dl.href = dataURL;
+		document.body.appendChild(dl);
+		dl.click();
+		dl.remove();
 	}
 }
 async function bulkDownloadZip() {

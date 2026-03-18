@@ -3,6 +3,7 @@ using CardConjurer.Models.Cards;
 using CardConjurer.Services.Assets;
 using CardConjurer.Endpoints;
 using CardConjurer.Services.Cards;
+using CardConjurer.Services.CardImage;
 using CardConjurer.Services.ImportNormalization;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
@@ -15,6 +16,7 @@ builder.Services.Configure<AssetStorageOptions>(builder.Configuration.GetSection
 builder.Services.AddSingleton<IAssetStorageService, FileSystemAssetStorageService>();
 builder.Services.Configure<CardStorageOptions>(builder.Configuration.GetSection("Cards"));
 builder.Services.AddSingleton<ICardStorageService, FileSystemCardStorageService>();
+builder.Services.AddSingleton<ICardImageService, CardImageService>();
 
 var app = builder.Build();
 
@@ -46,5 +48,6 @@ app.MapRazorPages();
 app.MapImportNormalizationEndpoints();
 app.MapAssetEndpoints();
 app.MapCardEndpoints();
+app.MapCardImageEndpoints();
 
 app.Run();
