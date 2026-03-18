@@ -6847,18 +6847,92 @@ else if (cardToImport.oracle_text && cardToImport.oracle_text.includes('Station'
 		fetchSetSymbol();
 	}
 }
-function loadAvailableCards(cardKeys = JSON.parse(localStorage.getItem('cardKeys'))) {
-	if (!cardKeys) {
+var _serverSavedCards = [];
+
+function getLocalCardKeys() {
+	var cardKeys = JSON.parse(localStorage.getItem('cardKeys'));
+	if (!Array.isArray(cardKeys)) {
 		cardKeys = [];
-		cardKeys.sort();
 		localStorage.setItem('cardKeys', JSON.stringify(cardKeys));
 	}
-	document.querySelector('#load-card-options').innerHTML = '<option selected="selected" disabled>None selected</option>';
-	cardKeys.forEach(item => {
-		var cardKeyOption = document.createElement('option');
-		cardKeyOption.innerHTML = item;
-		document.querySelector('#load-card-options').appendChild(cardKeyOption);
+	return cardKeys;
+}
+
+function populateSavedCardSelect(selector, items, placeholder, getValue = item => item, getLabel = item => item, selectedValue = '') {
+	var select = document.querySelector(selector);
+	if (!select) {
+		return;
+	}
+	select.innerHTML = null;
+	var placeholderOption = document.createElement('option');
+	placeholderOption.selected = true;
+	placeholderOption.disabled = true;
+	placeholderOption.innerHTML = items.length === 0 ? placeholder : 'None selected';
+	select.appendChild(placeholderOption);
+	items.forEach(item => {
+		var option = document.createElement('option');
+		option.value = getValue(item);
+		option.innerHTML = getLabel(item);
+		select.appendChild(option);
 	});
+	if (selectedValue && items.some(item => getValue(item) == selectedValue)) {
+		select.value = selectedValue;
+	}
+}
+
+function loadAvailableCards(cardKeys = getLocalCardKeys()) {
+	cardKeys = Array.isArray(cardKeys) ? cardKeys.slice().sort() : [];
+	localStorage.setItem('cardKeys', JSON.stringify(cardKeys));
+	populateSavedCardSelect('#load-card-options', cardKeys, 'No local cards saved');
+}
+
+function serializeCurrentCardState() {
+	var cardToSave = JSON.parse(JSON.stringify(card));
+	cardToSave.frames.forEach(frame => {
+		delete frame.image;
+		frame.masks.forEach(mask => delete mask.image);
+	});
+	return cardToSave;
+}
+
+function readLocalCardData(selectedCardKey) {
+	if (!selectedCardKey) {
+		return null;
+	}
+	var raw = localStorage.getItem(selectedCardKey);
+	return raw ? JSON.parse(raw) : null;
+}
+
+function getSelectedServerCardSummary() {
+	var select = document.querySelector('#server-card-options');
+	if (!select || !select.value) {
+		return null;
+	}
+	return _serverSavedCards.find(item => item.id == select.value) || null;
+}
+
+async function refreshServerAvailableCards(selectedId = '') {
+	var select = document.querySelector('#server-card-options');
+	if (!select) {
+		return;
+	}
+	select.innerHTML = '<option selected="selected" disabled>Loading server cards...</option>';
+	try {
+		var response = await fetch('/api/cards');
+		if (!response.ok) {
+			throw new Error('Failed to load server cards (' + response.status + ')');
+		}
+		_serverSavedCards = await response.json();
+		populateSavedCardSelect('#server-card-options', _serverSavedCards, 'No server cards saved', item => item.id, item => item.displayName, selectedId);
+	} catch (error) {
+		console.error('Could not load server saved cards:', error);
+		_serverSavedCards = [];
+		populateSavedCardSelect('#server-card-options', [], 'Server cards unavailable');
+	}
+}
+
+async function loadServerAvailableCards(selectedId = '') {
+	await refreshServerAvailableCards(selectedId);
 }
 async function ensureCardFontsLoaded(cardToLoad) {
 	if (!document.fonts || !cardToLoad || !cardToLoad.text) {
@@ -6927,11 +7001,7 @@ function saveCard(saveFromFile) {
 	if (saveFromFile) {
 		cardToSave = saveFromFile.data;
 	} else {
-		cardToSave = JSON.parse(JSON.stringify(card));
-		cardToSave.frames.forEach(frame => {
-			delete frame.image;
-			frame.masks.forEach(mask => delete mask.image);
-		});
+		cardToSave = serializeCurrentCardState();
 	}
 	try {
 		localStorage.setItem(cardKey, JSON.stringify(cardToSave));
@@ -6945,12 +7015,128 @@ function saveCard(saveFromFile) {
 		notify('You have exceeded your 5MB of local storage, and your card has failed to save. If you would like to continue saving cards, please download all saved cards, then delete all saved cards to free up space.<br><br>Local storage is most often exceeded by uploading large images directly from your computer. If possible/convenient, using a URL avoids the need to save these large images.<br><br>Apologies for the inconvenience.');
 	}
 }
-async function loadCard(selectedCardKey) {
+async function saveServerCard() {
+	var selectedSummary = getSelectedServerCardSummary();
+	var shouldOverwrite = false;
+	if (selectedSummary) {
+		shouldOverwrite = confirm('Would you like to overwrite the selected server card "' + selectedSummary.displayName + '"?\n\nClick Cancel to create a new server card instead.');
+	}
+	var defaultName = selectedSummary ? selectedSummary.displayName : getCardName();
+	var displayName = prompt('Enter the name you would like to save your server card under:', defaultName);
+	if (!displayName) {
+		return null;
+	}
+	displayName = displayName.trim();
+	if (!displayName) {
+		return null;
+	}
+	try {
+		var response = await fetch('/api/cards', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				id: shouldOverwrite && selectedSummary ? selectedSummary.id : null,
+				displayName: displayName,
+				legacyKey: shouldOverwrite && selectedSummary ? selectedSummary.legacyKey : null,
+				cardJson: serializeCurrentCardState()
+			})
+		});
+		if (!response.ok) {
+			throw new Error('Save failed (' + response.status + ')');
+		}
+		var saved = await response.json();
+		await refreshServerAvailableCards(saved.id);
+		notify('Server card saved as "' + saved.displayName + '".', 4);
+		return saved;
+	} catch (error) {
+		console.error('Failed to save card to server:', error);
+		notify('Saving the card to the server failed.', 5);
+		return null;
+	}
+}
+
+async function sendLocalCardToServer() {
+	var cardKey = document.querySelector('#load-card-options')?.value;
+	if (!cardKey) {
+		notify('Select a local card first.', 3);
+		return;
+	}
+	var localCard = readLocalCardData(cardKey);
+	if (!localCard) {
+		notify('Could not read the selected local card.', 4);
+		return;
+	}
+	try {
+		var response = await fetch('/api/cards', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				displayName: cardKey,
+				legacyKey: cardKey,
+				cardJson: localCard
+			})
+		});
+		if (!response.ok) {
+			throw new Error('Send failed (' + response.status + ')');
+		}
+		var saved = await response.json();
+		await refreshServerAvailableCards(saved.id);
+		notify('Local card sent to the server as "' + saved.displayName + '".', 4);
+	} catch (error) {
+		console.error('Failed to send local card to server:', error);
+		notify('Sending the local card to the server failed.', 5);
+	}
+}
+
+async function sendAllLocalCardsToServer() {
+	var cardKeys = getLocalCardKeys();
+	if (!cardKeys.length) {
+		notify('No local cards found to send.', 3);
+		return;
+	}
+	var cards = cardKeys.map(key => {
+		var data = readLocalCardData(key);
+		return data ? { key: key, data: data } : null;
+	}).filter(Boolean);
+	if (!cards.length) {
+		notify('No readable local cards were found to send.', 4);
+		return;
+	}
+	try {
+		var response = await fetch('/api/cards/import-local', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ cards: cards })
+		});
+		if (!response.ok) {
+			throw new Error('Bulk send failed (' + response.status + ')');
+		}
+		var result = await response.json();
+		await refreshServerAvailableCards();
+		notify(result.importedCount + ' local card(s) sent to the server.', 4);
+	} catch (error) {
+		console.error('Failed to send all local cards to server:', error);
+		notify('Sending local cards to the server failed.', 5);
+	}
+}
+
+async function fetchServerSavedCard(selectedCardId) {
+	if (!selectedCardId) {
+		return null;
+	}
+	var response = await fetch('/api/cards/' + encodeURIComponent(selectedCardId));
+	if (!response.ok) {
+		throw new Error('Load failed (' + response.status + ')');
+	}
+	return await response.json();
+}
+
+async function loadCardData(cardData, label = 'selected card') {
 	//clear the draggable frames
 	document.querySelector('#frame-list').innerHTML = null;
 	//clear the existing card, then replace it with the new JSON
 	card = {};
-	card = JSON.parse(localStorage.getItem(selectedCardKey));
+	card = cardData ? JSON.parse(JSON.stringify(cardData)) : null;
 	//if the card was loaded properly...
 	if (card) {
 		//load values from card into html inputs
@@ -7022,7 +7208,24 @@ async function loadCard(selectedCardKey) {
 		setTimeout(drawText, 120);
 		FontLoadTracker.stop();
 	} else {
-		notify(selectedCardKey + ' failed to load.', 5)
+		notify(label + ' failed to load.', 5)
+	}
+}
+
+async function loadCard(selectedCardKey) {
+	await loadCardData(readLocalCardData(selectedCardKey), selectedCardKey);
+}
+
+async function loadServerCard(selectedCardId) {
+	if (!selectedCardId) {
+		return;
+	}
+	try {
+		var serverCard = await fetchServerSavedCard(selectedCardId);
+		await loadCardData(serverCard.cardJson, serverCard.displayName || serverCard.legacyKey || serverCard.id);
+	} catch (error) {
+		console.error('Failed to load server card:', error);
+		notify('Loading the server card failed.', 5);
 	}
 }
 function deleteCard() {
@@ -7034,6 +7237,29 @@ function deleteCard() {
 		localStorage.setItem('cardKeys', JSON.stringify(cardKeys));
 		localStorage.removeItem(keyToDelete);
 		loadAvailableCards(cardKeys);
+	}
+}
+async function deleteServerCard() {
+	var selectedSummary = getSelectedServerCardSummary();
+	if (!selectedSummary) {
+		notify('Select a server card first.', 3);
+		return;
+	}
+	if (!confirm('Delete the server card "' + selectedSummary.displayName + '"? This cannot be undone.')) {
+		return;
+	}
+	try {
+		var response = await fetch('/api/cards/' + encodeURIComponent(selectedSummary.id), {
+			method: 'DELETE'
+		});
+		if (!response.ok && response.status != 404) {
+			throw new Error('Delete failed (' + response.status + ')');
+		}
+		await refreshServerAvailableCards();
+		notify('Server card deleted.', 4);
+	} catch (error) {
+		console.error('Failed to delete server card:', error);
+		notify('Deleting the server card failed.', 5);
 	}
 }
 function deleteSavedCards() {
@@ -7065,6 +7291,25 @@ function uploadSavedCards(event) {
 		JSON.parse(reader.result).forEach(item => saveCard(item));
 	}
 	reader.readAsText(event.target.files[0]);
+}
+
+async function sendServerCardToLocal() {
+	var selectedSummary = getSelectedServerCardSummary();
+	if (!selectedSummary) {
+		notify('Select a server card first.', 3);
+		return;
+	}
+	try {
+		var serverCard = await fetchServerSavedCard(selectedSummary.id);
+		saveCard({
+			key: selectedSummary.displayName || selectedSummary.legacyKey || selectedSummary.id,
+			data: serverCard.cardJson
+		});
+		notify('Server card copied to local storage.', 4);
+	} catch (error) {
+		console.error('Failed to copy server card to local storage:', error);
+		notify('Copying the server card to local storage failed.', 5);
+	}
 }
 //TUTORIAL TAB
 function loadTutorialVideo() {
@@ -7453,6 +7698,7 @@ bindInputs('#show-guidelines', '#show-guidelines-2', true);
 loadScript('/js/frames/groupStandard-3.js');
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
 loadAvailableCards();
+loadServerAvailableCards();
 initDraggableArt();
 refreshArtLibrarySelect();
 refreshFrameLibrarySelect();

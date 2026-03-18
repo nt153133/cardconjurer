@@ -692,12 +692,26 @@
 							<button class='input margin-bottom' onclick='pasteCardText();'>Paste card</button>
 						</div>
 						<div class='readable-background margin-bottom padding'>
-							<h5 class='padding margin-bottom input-description'>Save your current card</h5>
-							<button class='input margin-bottom' onclick='saveCard();'>Save Card</button>
-							<h5 class='padding margin-bottom input-description'>Load a saved card</h5>
-							<select id='load-card-options' class='input margin-bottom' type='text' onchange='loadCard(this.value);' aria-label='Load a saved card'></select>
-							<h5 class='padding margin-bottom input-description'>Delete selected card</h5>
-							<button class='input' onclick='deleteCard();'>Delete Card</button>
+							<h5 class='padding margin-bottom input-description'>Save your current card locally</h5>
+							<button class='input margin-bottom' onclick='saveCard();'>Save Local Card</button>
+							<h5 class='padding margin-bottom input-description'>Load a locally saved card</h5>
+							<select id='load-card-options' class='input margin-bottom' type='text' onchange='loadCard(this.value);' aria-label='Load a locally saved card'></select>
+							<div class='input-grid margin-bottom'>
+								<button class='input' onclick='sendLocalCardToServer();'>Send Selected Local to Server</button>
+								<button class='input' onclick='sendAllLocalCardsToServer();'>Send All Local to Server</button>
+							</div>
+							<h5 class='padding margin-bottom input-description'>Delete selected local card</h5>
+							<button class='input margin-bottom' onclick='deleteCard();'>Delete Local Card</button>
+							<h5 class='padding margin-bottom input-description'>Save your current card to the server</h5>
+							<button class='input margin-bottom' onclick='saveServerCard();'>Save Server Card</button>
+							<h5 class='padding margin-bottom input-description'>Load a server saved card</h5>
+							<select id='server-card-options' class='input margin-bottom' type='text' onchange='loadServerCard(this.value);' aria-label='Load a server saved card'></select>
+							<div class='input-grid margin-bottom'>
+								<button class='input' onclick='sendServerCardToLocal();'>Send Selected Server to Local</button>
+								<button class='input' onclick='refreshServerAvailableCards();'>Refresh Server List</button>
+							</div>
+							<h5 class='padding margin-bottom input-description'>Delete selected server card</h5>
+							<button class='input' onclick='deleteServerCard();'>Delete Server Card</button>
 						</div>
 						<div class='readable-background padding margin-bottom'>
 							<h5 class='padding margin-bottom input-description'>Download all saved cards as a file</h5>
