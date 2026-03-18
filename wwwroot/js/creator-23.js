@@ -6860,6 +6860,43 @@ function loadAvailableCards(cardKeys = JSON.parse(localStorage.getItem('cardKeys
 		document.querySelector('#load-card-options').appendChild(cardKeyOption);
 	});
 }
+async function ensureCardFontsLoaded(cardToLoad) {
+	if (!document.fonts || !cardToLoad || !cardToLoad.text) {
+		return;
+	}
+
+	const fontFamilies = new Set();
+	Object.values(cardToLoad.text).forEach(textObject => {
+		if (!textObject) {
+			return;
+		}
+		if (textObject.font) {
+			fontFamilies.add(String(textObject.font));
+		}
+		if (textObject.text) {
+			const matches = String(textObject.text).match(/\{font([^}]+)\}/g) || [];
+			matches.forEach(match => {
+				const family = match.replace('{font', '').replace('}', '');
+				if (family) {
+					fontFamilies.add(family);
+				}
+			});
+		}
+	});
+
+	const loaders = [];
+	fontFamilies.forEach(family => {
+		loaders.push(document.fonts.load(`16px ${family}`));
+		loaders.push(document.fonts.load(`16px "${family}"`));
+	});
+
+	try {
+		await Promise.all(loaders);
+		await document.fonts.ready;
+	} catch (error) {
+		console.warn('Some fonts did not report loaded status during card load:', error);
+	}
+}
 function importChanged() {
 	var unique = document.querySelector('#importAllPrints').checked ? 'prints' : '';
 	fetchScryfallData(document.querySelector("#import-name").value, importCard, unique);
@@ -6952,12 +6989,14 @@ async function loadCard(selectedCardKey) {
 		serialInfoEdited();
 
 		card.frames.reverse();
-		await card.frames.forEach(item => addFrame([], item));
+		for (const item of card.frames) {
+			await addFrame([], item);
+		}
 		card.frames.reverse();
 		if (card.onload) {
 			await loadScript(card.onload);
 		}
-		card.manaSymbols.forEach(item => loadScript(item));
+		await Promise.all(card.manaSymbols.map(item => loadScript(item)));
 		//canvases
 		var canvasesResized = false;
 		canvasList.forEach(name => {
@@ -6972,6 +7011,16 @@ async function loadCard(selectedCardKey) {
 			bottomInfoEdited();
 			watermarkEdited();
 		}
+
+		// Force font-dependent text redraw after loaded card fonts are available.
+		FontLoadTracker.start();
+		clearTimeout(writingText);
+		await drawText();
+		await ensureCardFontsLoaded(card);
+		await FontLoadTracker.waitForAll();
+		await drawText();
+		setTimeout(drawText, 120);
+		FontLoadTracker.stop();
 	} else {
 		notify(selectedCardKey + ' failed to load.', 5)
 	}
