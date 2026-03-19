@@ -22,6 +22,8 @@ All notable product-facing changes should be added here.
 - Frame options layout: grouped `Rounded Corners`, `Guidelines`, and `Transparencies` on one line and added `Show Cut/Safe Overlay` toggle.
 - Profile placement overlay behavior: mode-aware rendering now draws safe only in cut mode, and cut + safe in bleed mode.
 - Download rendering behavior: profile overlay remains visible in editor preview but is suppressed during output generation.
+- Card-size updates now automatically reapply an active Margin frame after `Apply card size` and load-with-selected-size-profile flows.
+- Loading with `Use selected size profile when loading cards` now notifies when a card's saved size is overridden to the selected profile size.
 
 ### Fixed
 - Creator startup stability: guarded optional DOM lookups (`#autoFrame`, `#autoframe-always-nyx`, `#art-update-autofit`) to prevent null-reference crashes.

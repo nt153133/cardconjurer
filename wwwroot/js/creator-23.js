@@ -506,17 +506,31 @@ function scaleHeight(input) {
 }
 
 // ── Canvas Size Settings ──────────────────────────────────────────────────────
-function applyStandardCardSize() {
+async function applyStandardCardSize() {
     var wEl = document.querySelector('#settings-card-width');
     var hEl = document.querySelector('#settings-card-height');
     var w = parseInt(wEl && wEl.value) || getStandardWidth();
     var h = parseInt(hEl && hEl.value) || getStandardHeight();
+    var shouldReapplyMarginFrame = !!(card && card.margins);
+    var previousMarginScale = shouldReapplyMarginFrame
+        ? {x: Number(card.marginX), y: Number(card.marginY)}
+        : null;
     if (w < MIN_CANVAS_SIZE || h < MIN_CANVAS_SIZE) {
         notify('Width and height must be at least ' + MIN_CANVAS_SIZE + ' px.', 4);
         return;
     }
     localStorage.setItem('standardCardWidth', w);
     localStorage.setItem('standardCardHeight', h);
+    if (shouldReapplyMarginFrame) {
+        var marginFrameReapplied = await applyMarginFrameSizing({
+            forceEnable: true,
+            fallbackMarginScale: previousMarginScale
+        });
+        if (marginFrameReapplied) {
+            notify('Canvas size set to ' + w + ' × ' + h + ' px and the margin frame was reapplied.', 3);
+            return;
+        }
+    }
     card.width = w;
     card.height = h;
     card.marginX = 0;
@@ -546,6 +560,89 @@ function resetStandardCardSize() {
 function saveCardSizeSettings() {
     var cb = document.querySelector('#settings-load-override-size');
     localStorage.setItem('loadCardUseStandardSize', cb ? cb.checked : false);
+}
+
+async function applyMarginFrameSizing(options = {}) {
+    var forceEnable = !!options.forceEnable;
+    var fallbackMarginScale = options.fallbackMarginScale;
+
+    if (!card || (!forceEnable && !card.margins)) {
+        return false;
+    }
+
+    await ensureCardSizeProfilesAvailable();
+
+    var selectedMarginScale = getSelectedCardSizeMarginScale();
+    var effectiveFallbackMarginScale = null;
+    if (fallbackMarginScale != null) {
+        var fallbackX = Number(fallbackMarginScale.x);
+        var fallbackY = Number(fallbackMarginScale.y);
+        var fallbackUniform = Number(fallbackMarginScale.uniform);
+        if (Number.isFinite(fallbackX) || Number.isFinite(fallbackY) || Number.isFinite(fallbackUniform)) {
+            effectiveFallbackMarginScale = fallbackMarginScale;
+        }
+    }
+
+    var effectiveMarginScale = selectedMarginScale || effectiveFallbackMarginScale;
+    if (effectiveMarginScale == null) {
+        logWarn('Margin frame could not be reapplied because no margin scale was available.');
+        return false;
+    }
+
+    await resetCardIrregularities({
+        canvas: [getStandardWidth(), getStandardHeight(), 0, 0],
+        marginScale: effectiveMarginScale,
+        resetOthers: false
+    });
+
+    card.margins = true;
+
+    var changedArtBounds = false;
+    if (card.artBounds) {
+        if (card.artBounds.width == 1) {
+            card.artBounds.width += 0.044;
+            changedArtBounds = true;
+        }
+        if (card.artBounds.x == 0) {
+            card.artBounds.x = -0.044;
+            card.artBounds.width += 0.044;
+            changedArtBounds = true;
+        }
+        if (card.artBounds.height == 1) {
+            card.artBounds.height += 1 / 35;
+            changedArtBounds = true;
+        }
+        if (card.artBounds.y == 0) {
+            card.artBounds.y = -1 / 35;
+            card.artBounds.height += 1 / 35;
+            changedArtBounds = true;
+        }
+    }
+
+    if (changedArtBounds) {
+        autoFitArt();
+    }
+
+    var cardVersion = String(card.version || '');
+    if (cardVersion.includes('planeswalker')) {
+        planeswalkerEdited();
+    }
+    if (cardVersion.includes('saga')) {
+        sagaEdited();
+    }
+    if (cardVersion.includes('class') && !cardVersion.includes('classic')) {
+        classEdited();
+    }
+    if (cardVersion.includes('station')) {
+        stationEdited();
+    }
+
+    drawTextBuffer();
+    drawFrames();
+    bottomInfoEdited();
+    watermarkEdited();
+    drawNewGuidelines();
+    return true;
 }
 
 var cardSizeProfilesByName = Object.create(null);
@@ -8178,12 +8275,32 @@ async function loadCardData(cardData, label = 'selected card') {
     card = cardData ? JSON.parse(JSON.stringify(cardData)) : null;
     //if the card was loaded properly...
     if (card) {
+        var shouldReapplyMarginFrame = false;
+        var previousMarginScale = null;
+        var overriddenLoadedCardSize = null;
         // Apply standard canvas size override if the setting is enabled.
         // All card positions are stored as 0–1 fractions, so they scale
         // proportionally with no extra work needed.
         if (localStorage.getItem('loadCardUseStandardSize') === 'true') {
-            card.width = getStandardWidth();
-            card.height = getStandardHeight();
+            var originalLoadedWidth = Number(card.width);
+            var originalLoadedHeight = Number(card.height);
+            var selectedWidth = getStandardWidth();
+            var selectedHeight = getStandardHeight();
+            shouldReapplyMarginFrame = !!card.margins;
+            if (shouldReapplyMarginFrame) {
+                previousMarginScale = {x: Number(card.marginX), y: Number(card.marginY)};
+            }
+            if (Number.isFinite(originalLoadedWidth) && Number.isFinite(originalLoadedHeight)
+                && (originalLoadedWidth !== selectedWidth || originalLoadedHeight !== selectedHeight)) {
+                overriddenLoadedCardSize = {
+                    oldWidth: originalLoadedWidth,
+                    oldHeight: originalLoadedHeight,
+                    newWidth: selectedWidth,
+                    newHeight: selectedHeight
+                };
+            }
+            card.width = selectedWidth;
+            card.height = selectedHeight;
             card.marginX = 0;
             card.marginY = 0;
         }
@@ -8244,6 +8361,24 @@ async function loadCardData(cardData, label = 'selected card') {
             drawFrames();
             bottomInfoEdited();
             watermarkEdited();
+        }
+
+        if (shouldReapplyMarginFrame) {
+            await applyMarginFrameSizing({
+                forceEnable: true,
+                fallbackMarginScale: previousMarginScale
+            });
+        }
+
+        if (overriddenLoadedCardSize) {
+            notify(
+                'Loaded card size changed from '
+                + overriddenLoadedCardSize.oldWidth + ' × ' + overriddenLoadedCardSize.oldHeight
+                + ' px to '
+                + overriddenLoadedCardSize.newWidth + ' × ' + overriddenLoadedCardSize.newHeight
+                + ' px because "Use selected size profile when loading cards" is enabled.',
+                5
+            );
         }
 
         // Force font-dependent text redraw after loaded card fonts are available.
