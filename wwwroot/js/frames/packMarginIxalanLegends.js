@@ -9,9 +9,7 @@ availableFrames = [
 document.querySelector('#loadFrameVersion').disabled = false;
 
 document.querySelector('#loadFrameVersion').onclick = async function() {
-	loadMarginVersion();
-
-	await resetCardIrregularities({canvas:[getStandardWidth(), getStandardHeight(), 89/2010, 81/2814], resetOthers:false});
+	await loadMarginVersion();
 
 	drawTextBuffer();
 	drawFrames();

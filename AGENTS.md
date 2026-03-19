@@ -26,6 +26,8 @@
 - When adding a new asset kind, update all of: `Models/Assets/AssetKinds.cs`, storage/list/delete behavior, and any creator dropdown/library code that fetches `/api/assets/...`.
 - Preserve existing JSON field names from Scryfall contracts via `[JsonPropertyName(...)]`; do not “clean up” names to C# casing only.
 - The import-normalization service uses plain regex/string transforms, not external parsers. Match that style when extending layout-specific parsing.
+- Changelog discipline: for every major feature, behavior change, or user-visible fix, add one entry to `CHANGELOG.md` in the same PR/commit.
+- Changelog entry format: keep each feature/fix line to 1-2 lines max, grouped under `Added`, `Changed`, or `Fixed` in `## Unreleased`.
 
 ## Local workflows
 - Primary local run path from `README.md`:

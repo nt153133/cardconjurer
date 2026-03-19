@@ -14,4 +14,6 @@ public interface ICardImageService
         string format,
         string? cardJsonMetadata,
         CancellationToken cancellationToken = default);
+
+    Task<Stream> ProcessAsync(byte[] sourceImageBytes, string format, string? cardJsonMetadata, string? requestCardSizeProfileName, bool requestIsPrintImage, CancellationToken cancellationToken);
 }

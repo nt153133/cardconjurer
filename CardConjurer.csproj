@@ -13,6 +13,8 @@
     <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
+    <PackageReference Include="SixLabors.ImageSharp.Web" Version="3.2.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -52,19 +54,6 @@
     <Content Remove="fonts\**" />
     <Content Remove="local_art\**" />
     <Content Remove="phyrexian\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="js\**" />
-    <None Remove="img\**" />
-    <None Remove="creator\**" />
-    <None Remove="css\**" />
-    <None Remove="data\**" />
-    <None Remove="converter\**" />
-    <None Remove="askurza\**" />
-    <None Remove="fonts\**" />
-    <None Remove="local_art\**" />
-    <None Remove="phyrexian\**" />
   </ItemGroup>
 
   <ItemGroup>

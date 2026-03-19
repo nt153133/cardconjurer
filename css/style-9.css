@@ -746,6 +746,133 @@ textarea.input {
 .creator-menu {
 	width: 100%;
 }
+
+/* Keep settings cards from stretching excessively on wide screens. */
+.creator-menu #creator-menu-sections > div > .readable-background,
+.creator-menu > .readable-background {
+	max-width: 58rem;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* Denser setting rows: allow more controls per line in Creator panels. */
+.creator-menu #creator-menu-sections .input-grid,
+.creator-menu > .readable-background .input-grid {
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	grid-gap: 0.4rem;
+}
+
+/* Import/Save utility actions: keep this block in two stable columns. */
+.import-save-actions-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	align-items: stretch;
+}
+
+.import-save-action-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.import-save-action-card > .input {
+	margin-top: auto;
+}
+
+/* Frame panel helper toggles near the bottom. */
+.frame-options-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+	align-items: stretch;
+}
+
+.validation-results-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+	grid-gap: 0.5rem;
+}
+
+.validation-result-card {
+	background: var(--input-background);
+	padding: 0.75rem;
+	border-top: 0.25rem solid #6d6d6d;
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.validation-result-card.invalid {
+	border-top-color: #d67b7b;
+}
+
+.validation-result-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 0.5rem;
+}
+
+.validation-result-header h5 {
+	font-size: 1rem;
+}
+
+.validation-status-badge {
+	background: #495057;
+	color: #fff;
+	padding: 0.15rem 0.45rem;
+	border-radius: 999px;
+	font-size: 0.85rem;
+	white-space: nowrap;
+}
+
+.validation-status-badge.invalid {
+	background: #8f3c3c;
+}
+
+.validation-metrics {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+	gap: 0.35rem;
+}
+
+.validation-metric {
+	background: #00000022;
+	padding: 0.4rem 0.5rem;
+	border-radius: 0.25rem;
+}
+
+.validation-metric span {
+	display: block;
+	font-size: 0.8rem;
+	color: var(--font-color-2);
+	margin-bottom: 0.15rem;
+}
+
+.validation-metric strong {
+	display: block;
+	font-size: 0.95rem;
+}
+
+.validation-result-card p,
+.validation-result-empty {
+	font-size: 0.95rem;
+	color: var(--font-color-2);
+}
+
+@media only screen and (max-width: 749px) {
+	.import-save-actions-grid {
+		grid-template-columns: 1fr !important;
+	}
+	.frame-options-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
+}
+
+/* Single controls outside grids should not span the entire panel width. */
+.creator-menu #creator-menu-sections > div > .readable-background > .input,
+.creator-menu > .readable-background > .input,
+.creator-menu #creator-menu-sections > div > .readable-background > .checkbox-container.input,
+.creator-menu > .readable-background > .checkbox-container.input {
+	max-width: 30rem;
+}
 @media only screen and (min-width: 1250px) {
 	.creator-grid {
 		grid-template-columns: 750px auto;

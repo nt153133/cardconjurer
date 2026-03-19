@@ -112,6 +112,7 @@
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "watermark")'>Watermark</h3>
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "bottomInfo")'>Collector</h3>
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "import")'>Import/Save</h3>
+					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "validation"); loadValidationTab();'>Validation</h3>
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "assetlibrary"); loadAssetLibrary();'>Asset Library</h3>
 					<h3 class='selectable readable-background' onclick='toggleCreatorTabs(event, "tutorial"); loadTutorialVideo();'>Tutorial</h3>
 				</div>
@@ -166,7 +167,7 @@
 							</div>
 							<h5 class='collapsible collapsed padding input-description' onclick='toggleCollapse(event);'>More options</h5>
 								<div>
-									<div class='input-grid margin-bottom'>
+									<div class='input-grid frame-options-grid margin-bottom'>
 										<button id='addToLeftHalf' class='input' onclick='addFrame([{src:"/img/frames/maskLeftHalf.png", name:"Left Half"}])'>Add Frame to Card (Left Half)</button>
 										<button id='addToMiddleThird' class='input' onclick='addFrame([{src:"/img/frames/maskMiddleThird.png", name:"Middle Third"}])'>Add Frame to Card (Middle Third)</button>
 										<button id='addToTopHalf' class='input' onclick='addFrame([{src:"/img/frames/maskTopHalf.png", name:"Top Half"}])'>Add Frame to Card (Top Half)</button>
@@ -201,40 +202,44 @@
 							</div>
 						</div>
 						<div class='readable-background padding'>
-							<h5 class='input-description margin-bottom'>Rounded Corners (When Downloaded)</h5>
-							<label class='checkbox-container input margin-bottom'>Rounded Corners
-								<input id='rounded-corners' checked="true" type='checkbox' onchange='setRoundedCorners(this.checked);'>
-								<span class='checkmark'></span>
-							</label>
-							<h5 class='input-description margin-bottom'>Show guidelines for text, art, watermark, and set symbols</h5>
-							<label class='checkbox-container input margin-bottom'>Guidelines
-								<input id='show-guidelines' type='checkbox' onchange='drawCard();'>
-								<span class='checkmark'></span>
-							</label>
-							<h5 class='input-description margin-bottom'>Highlight transparencies in card</h5>
-							<label class='checkbox-container input'>Transparencies
-								<input id='highlight-transparencies' type='checkbox' onchange='toggleCardBackgroundColor(this.checked);'>
-								<span class='checkmark'></span>
-							</label>
-						</div>
-						<div class='readable-background padding margin-bottom'>
-							<h5 class='input-description margin-bottom'>Canvas Size</h5>
-							<h5 class='padding input-description'>Sets the pixel resolution of the card canvas. All component positions are stored proportionally, so they scale automatically.</h5>
+							<h5 class='input-description margin-bottom'>Frame options</h5>
+							<div class='input-grid frame-options-grid margin-bottom'>
+								<label class='checkbox-container input'>Rounded Corners
+									<input id='rounded-corners' checked="true" type='checkbox' onchange='setRoundedCorners(this.checked);'>
+									<span class='checkmark'></span>
+								</label>
+								<label class='checkbox-container input'>Guidelines
+									<input id='show-guidelines' type='checkbox' onchange='drawCard();'>
+									<span class='checkmark'></span>
+								</label>
+								<label class='checkbox-container input'>Transparencies
+									<input id='highlight-transparencies' type='checkbox' onchange='toggleCardBackgroundColor(this.checked);'>
+									<span class='checkmark'></span>
+								</label>
+								<label class='checkbox-container input'>Show Cut/Safe Overlay
+									<input id='show-profile-placement-overlay' type='checkbox' onchange='drawCard();'>
+									<span class='checkmark'></span>
+								</label>
+							</div>
+							<h5 class='input-description margin-bottom'>Card size profile</h5>
+							<select id='settings-card-size-profile' class='input margin-bottom' onchange='onCardSizeProfileChanged();' aria-label='Card size profile'>
+								<option value='' selected='selected'>Loading profiles...</option>
+							</select>
 							<div class='input-grid margin-bottom'>
 								<div>
-									<h5 class='padding input-description'>Width (px)</h5>
-									<input id='settings-card-width' type='number' min='100' max='9999' step='1' class='input' placeholder='2010' aria-label='Card canvas width in pixels'>
+									<h5 class='input-description'>Width</h5>
+									<input id='settings-card-width' class='input' type='number' min='1' step='1' placeholder='1005' aria-label='Card width'>
 								</div>
 								<div>
-									<h5 class='padding input-description'>Height (px)</h5>
-									<input id='settings-card-height' type='number' min='100' max='9999' step='1' class='input' placeholder='2814' aria-label='Card canvas height in pixels'>
+									<h5 class='input-description'>Height</h5>
+									<input id='settings-card-height' class='input' type='number' min='1' step='1' placeholder='1407' aria-label='Card height'>
 								</div>
 							</div>
 							<div class='input-grid margin-bottom'>
-								<button class='input' onclick='applyStandardCardSize();'>Apply to Current Card</button>
-								<button class='input' onclick='resetStandardCardSize();'>Reset to Default (2010 × 2814)</button>
+								<button class='input' onclick='applyStandardCardSize();'>Apply card size</button>
+								<button class='input' onclick='resetStandardCardSize();'>Reset to default size</button>
 							</div>
-							<label class='checkbox-container input'>Override size when loading saved cards
+							<label class='checkbox-container input'>Use selected size profile when loading cards
 								<input id='settings-load-override-size' type='checkbox' onchange='saveCardSizeSettings();'>
 								<span class='checkmark'></span>
 							</label>
@@ -751,28 +756,34 @@
 							<button class='input margin-bottom' onclick='pasteCardText();'>Paste card</button>
 						</div>
 						<div class='readable-background margin-bottom padding'>
-							<h5 class='padding margin-bottom input-description'>Save your current card locally</h5>
-							<button class='input margin-bottom' onclick='saveCard();'>Save Local Card</button>
-							<h5 class='padding margin-bottom input-description'>Load a locally saved card</h5>
-							<select id='load-card-options' class='input margin-bottom' type='text' onchange='loadCard(this.value);' aria-label='Load a locally saved card'></select>
-							<div class='input-grid margin-bottom'>
-								<button class='input' onclick='sendLocalCardToServer();'>Send Selected Local to Server</button>
-								<button class='input' onclick='sendAllLocalCardsToServer();'>Send All Local to Server</button>
+							<div class='input-grid import-save-actions-grid margin-bottom'>
+								<div class='import-save-action-card'>
+									<h5 class='padding margin-bottom input-description'>Save your current card locally</h5>
+									<button class='input margin-bottom' onclick='saveCard();'>Save Local Card</button>
+									<h5 class='padding margin-bottom input-description'>Load a locally saved card</h5>
+									<select id='load-card-options' class='input margin-bottom' type='text' onchange='loadCard(this.value);' aria-label='Load a locally saved card'></select>
+									<div class='input-grid margin-bottom'>
+										<button class='input' onclick='sendLocalCardToServer();'>Send Selected Local to Server</button>
+										<button class='input' onclick='sendAllLocalCardsToServer();'>Send All Local to Server</button>
+									</div>
+									<h5 class='padding margin-bottom input-description'>Delete selected local card</h5>
+									<button class='input margin-bottom' onclick='deleteCard();'>Delete Local Card</button>
+								</div>
+								<div class='import-save-action-card'>
+									<h5 class='padding margin-bottom input-description'>Save your current card to the server</h5>
+									<button class='input margin-bottom' onclick='saveServerCard();'>Save Server Card</button>
+									<h5 class='padding margin-bottom input-description'>Load a server saved card</h5>
+									<select id='server-card-options' class='input margin-bottom' type='text' onchange='loadServerCard(this.value);' aria-label='Load a server saved card'></select>
+									<div class='input-grid margin-bottom'>
+										<button class='input' onclick='sendServerCardToLocal();'>Send Selected Server to Local</button>
+										<button class='input' onclick='refreshServerAvailableCards();'>Refresh Server List</button>
+									</div>
+									<h5 class='padding margin-bottom input-description'>Delete selected server card</h5>
+									<button class='input' onclick='deleteServerCard();'>Delete Server Card</button>
+								</div>
 							</div>
-							<h5 class='padding margin-bottom input-description'>Delete selected local card</h5>
-							<button class='input margin-bottom' onclick='deleteCard();'>Delete Local Card</button>
-							<h5 class='padding margin-bottom input-description'>Save your current card to the server</h5>
-							<button class='input margin-bottom' onclick='saveServerCard();'>Save Server Card</button>
-							<h5 class='padding margin-bottom input-description'>Load a server saved card</h5>
-							<select id='server-card-options' class='input margin-bottom' type='text' onchange='loadServerCard(this.value);' aria-label='Load a server saved card'></select>
-							<div class='input-grid margin-bottom'>
-								<button class='input' onclick='sendServerCardToLocal();'>Send Selected Server to Local</button>
-								<button class='input' onclick='refreshServerAvailableCards();'>Refresh Server List</button>
-							</div>
-							<h5 class='padding margin-bottom input-description'>Delete selected server card</h5>
-							<button class='input' onclick='deleteServerCard();'>Delete Server Card</button>
 						</div>
-						<div class='readable-background margin-bottom'>
+						<div class='readable-background padding margin-bottom'>
 							<h5 class='padding margin-bottom input-description'>Download all saved cards as a file</h5>
 							<button class='input margin-bottom' onclick='downloadSavedCards();'>Download Cards File</button>
 							<h5 class='padding margin-bottom input-description'>Download all saved card images as a zip file(can take a long time)</h5>
@@ -792,6 +803,17 @@
 								<h5 class='margin-top'>Your localstorage runs out of space especially fast when you upload images directly from your computer, because the image itself has to be saved. However, if possible, uploading images via URL will save massive amounts of space, allowing you to save many more cards.</h5>
 								<h5 class='margin-top'>And if you do run out of space, don't worry! You can download all saved cards then delete all saved cards,  freeing up all 5MB of space. And when you'd like to edit the cards you previously downloaded/deleted, you can reupload them via the file upload (under "Upload previously downloaded cards").</h5>
 							</div>
+						</div>
+					</div>
+					<div id='creator-menu-validation' class='hidden'>
+						<div class='readable-background padding margin-bottom'>
+							<h5 class='padding margin-bottom input-description'>Validate saved cards against known card size profiles.</h5>
+							<h5 id='validation-local-summary' class='padding margin-bottom input-description'>Loading local validation...</h5>
+							<div id='validation-local-results' class='validation-results-grid'></div>
+						</div>
+						<div class='readable-background padding margin-bottom'>
+							<h5 id='validation-server-summary' class='padding margin-bottom input-description'>Loading server validation...</h5>
+							<div id='validation-server-results' class='validation-results-grid'></div>
 						</div>
 					</div>
 					<div id='creator-menu-assetlibrary' class='hidden'>
@@ -884,6 +906,10 @@
 					<h3 class='download padding' onclick='downloadCard();'>Download your card</h3>
 					<h5 onclick='downloadCard(false, true);' id='downloadJpg' href='' target='_blank' class='padding download input-description'>Click here to download as JPEG</h5>
 					<h5 onclick='downloadCard(true);' id='downloadAlt' href='' target='_blank' class='padding download input-description'>Click here for an alternative download</h5>
+					<label class='checkbox-container input margin-top'>Download print version (includes bleed)
+						<input id='download-print-image' type='checkbox'>
+						<span class='checkmark'></span>
+					</label>
 					<!-- <label class='checkbox-container input margin-bottom'>800 DPI
 						<input id='high-res' type='checkbox' onchange='toggleHighRes();'>
 						<span class='checkmark'></span>
@@ -1071,6 +1097,7 @@
 	</div>
 
 @section Scripts {
-<script defer src="/js/creator-23.js"></script>
-<script defer src="/js/frameSearch.js"></script>
+	<script defer src="/js/creator-23.constants.js"></script>
+	<script defer src="/js/creator-23.js"></script>
+	<script defer src="/js/frameSearch.js"></script>
 }

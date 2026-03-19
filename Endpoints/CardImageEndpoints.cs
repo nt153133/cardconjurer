@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CardConjurer.Models.CardImage;
+using CardConjurer.Models.CardImage.Sizing;
 using CardConjurer.Services.CardImage;
 
 namespace CardConjurer.Endpoints;
@@ -9,6 +10,35 @@ public static class CardImageEndpoints
     public static IEndpointRouteBuilder MapCardImageEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/card-image");
+
+        /// <summary>
+        /// GET /api/card-image/size-profiles
+        /// Returns predefined size profiles for UI selection.
+        /// </summary>
+        group.MapGet("/size-profiles", () =>
+        {
+            var profiles = CardSizeCatalog.Profiles
+                .Select(p => new
+                {
+                    p.Name,
+                    p.Dpi,
+                    cut = new { width = p.CutSize.Width, height = p.CutSize.Height },
+                    bleed = new { width = p.BleedSize.Width, height = p.BleedSize.Height },
+                    safe = new { width = p.SafeSize.Width, height = p.SafeSize.Height },
+                    marginScale = new { uniform = 1, x = p.MarginScaleX, y = p.MarginScaleY },
+                    // Debug helpers: verify margin scale produces correct bleed size via JS formula: cut * (1 + 2*margin)
+                    expectedBleedFromCutX = (int)(p.CutSize.Width * (1 + 2 * p.MarginScaleX)),
+                    expectedBleedFromCutY = (int)(p.CutSize.Height * (1 + 2 * p.MarginScaleY)),
+                    debug = p.MarginScaleDebugString
+                })
+                .ToList();
+
+            return Results.Ok(new
+            {
+                defaultProfileName = CardSizeCatalog.DefaultProfile.Name,
+                profiles
+            });
+        });
 
         /// <summary>
         /// POST /api/card-image/render
@@ -41,7 +71,7 @@ public static class CardImageEndpoints
                 : "png";
 
             // Deserialize into the strongly-typed model for any server-side
-            // use (e.g. naming, future server-side card storage, pipeline opts).
+            // use (e.g., naming, future server-side card storage, pipeline opts).
             var cardData = request.CardJson.ValueKind is not
                     (JsonValueKind.Undefined or JsonValueKind.Null)
                 ? CardData.FromJsonElement(request.CardJson)
@@ -65,7 +95,7 @@ public static class CardImageEndpoints
             var mimeType  = format == "jpeg" ? "image/jpeg" : "image/png";
 
             var outputStream = await imageService.ProcessAsync(
-                sourceBytes, format, cardJsonString, cancellationToken);
+                sourceBytes, format, cardJsonString,request.CardSizeProfileName, request.IsPrintImage, cancellationToken);
 
             return Results.Stream(
                 stream: outputStream,
@@ -93,4 +123,8 @@ public sealed record RenderCardImageRequest(
     /// <summary>Suggested file name without extension</summary>
     string? FileName,
     /// <summary>"png" or "jpeg". Defaults to "png".</summary>
-    string? Format);
+    string? Format,
+    /// <summary>Selected card-size profile name from the Creator UI.</summary>
+    string? CardSizeProfileName = null,
+    /// <summary>True when export target is print/bleed image. Defaults to false (cut image).</summary>
+    bool IsPrintImage = false);

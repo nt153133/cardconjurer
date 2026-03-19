@@ -29,8 +29,11 @@ loadFramePacks([
 //For multiple Margin packs
 var loadMarginVersion = async () => {
 	//resets things so that every frame doesn't have to
-	//await resetCardIrregularities({canvas:[getStandardWidth(), getStandardHeight(), 0.044, 1/35], resetOthers:false});
-	await resetCardIrregularities({canvas:[getStandardWidth(), getStandardHeight(), 96/(getStandardWidth()+192), 96/(getStandardHeight()+192)], resetOthers:false});
+	await resetCardIrregularities({
+		canvas:[getStandardWidth(), getStandardHeight(), 0, 0],
+		useSelectedProfileMarginScale:true,
+		resetOthers:false
+	});
 	//sets card version
 	// card.version = 'margin';
 	card.margins = true;
