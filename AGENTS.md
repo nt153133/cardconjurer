@@ -1,48 +1,82 @@
 # AGENTS.md
 
 ## Snapshot
-- `CardConjurer.csproj` is a .NET 8 ASP.NET Core app. `Program.cs` wires Razor Pages plus two singleton-backed minimal API areas: asset storage and import normalization.
-- The current server-rendered app serves Razor pages from `Pages/` and static files from `wwwroot/`. The main user flow is `Pages/Creator.cshtml` + `wwwroot/js/creator-23.js`.
-- This repo also still contains the older static-site layout at the project root (`index.html`, `creator/`, `js/`, `css/`, etc.). `.github/workflows/publish.yaml` syncs the whole repo to S3, so those legacy files are still relevant.
+- `CardConjurer.csproj` is a .NET 8 ASP.NET Core app. `Program.cs` wires Razor Pages plus minimal APIs for assets, cards, card-image rendering, and import normalization.
+- Primary UI flow is `Pages/Creator.cshtml` + `wwwroot/js/creator-23.js`.
+- Legacy static-site files still exist at repo root (`index.html`, `css/`, `js/`, etc.) ignore these unless needed for reference.
 
-## Where to look first
-- App startup and route registration: `Program.cs`
-- Creator UI markup: `Pages/Creator.cshtml`
-- Shared shell/layout: `Pages/Shared/_Layout.cshtml`
-- Main creator behavior: `wwwroot/js/creator-23.js` (root `js/creator-23.js` is a near-mirror)
-- Asset API + storage rules: `Endpoints/AssetEndpoints.cs`, `Services/Assets/FileSystemAssetStorageService.cs`, `Models/Assets/*`
-- Import normalization API + contracts: `Endpoints/ImportNormalizationEndpoints.cs`, `Services/ImportNormalization/CardImportNormalizationService.cs`, `Models/ImportNormalization/ImportNormalizationContracts.cs`
+## Fast Intent Router (Use First)
 
-## Architecture and data flow
-- UI actions in the creator call server APIs directly with `fetch(...)`; examples in `creator-23.js` include `/api/assets/upload/{kind}`, `/api/assets/art-sources`, `/api/assets/sources/set-symbols`, and `/api/assets/{kind}`.
-- Asset uploads are persisted on disk, not in a database. Default root is `data/uploads`, served back under `/user-content` via the extra `UseStaticFiles(...)` registration in `Program.cs`.
-- Art uploads are special: `FileSystemAssetStorageService` hashes art with SHA-256, rejects duplicates with `409`, and stores files as `hash_originalName.ext`.
-- Import-normalization logic is server-side C# that mirrors former client parsing behavior; keep request/response shapes aligned with Scryfall-like JSON contracts in `Models/ImportNormalization/ImportNormalizationContracts.cs`.
-- `POST /api/cards/prepare-localstorage-upload` is an adapter endpoint: it preserves raw client card JSON while attaching normalized imported-card data for future persistence.
+### Phrase -> first files/symbols
+- `download card`, `print version`, `download output`, `overlay in download`
+    - `wwwroot/js/creator-23.js`: `downloadCard(...)`, `drawCard(...)`, `suppressProfilePlacementOverlay`
+    - `Pages/Creator.cshtml`: download section, `#download-print-image`
 
-## Project-specific conventions
-- Treat the creator page as markup-heavy and JS-driven: most behavior lives in `creator-23.js`, while `Pages/Creator.cshtml.cs` is intentionally minimal.
-- If you change a user-facing static asset referenced by Razor (`/js/...`, `/css/...`, `/img/...`), update the `wwwroot/` copy first. Check whether the matching root-level legacy file also needs the same change to keep the static/S3 path in sync.
-- When adding a new asset kind, update all of: `Models/Assets/AssetKinds.cs`, storage/list/delete behavior, and any creator dropdown/library code that fetches `/api/assets/...`.
-- Preserve existing JSON field names from Scryfall contracts via `[JsonPropertyName(...)]`; do not “clean up” names to C# casing only.
-- The import-normalization service uses plain regex/string transforms, not external parsers. Match that style when extending layout-specific parsing.
-- Changelog discipline: for every major feature, behavior change, or user-visible fix, add one entry to `CHANGELOG.md` in the same PR/commit.
-- Changelog entry format: keep each feature/fix line to 1-2 lines max, grouped under `Added`, `Changed`, or `Fixed` in `## Unreleased`.
+- `margins`, `bleed`, `1/8 margin`, `margin frame`
+    - `wwwroot/js/creator-23.js`: `applyMarginFrameSizing(...)`, `resetCardIrregularities(...)`, `getSelectedCardSizeMarginScale(...)`
+    - `wwwroot/js/frames/groupMargin.js`: `loadMarginVersion`
 
-## Local workflows
-- Primary local run path from `README.md`:
+- `card size profile`, `apply card size`, `load with selected size profile`
+    - `wwwroot/js/creator-23.js`: `onCardSizeProfileChanged(...)`, `applyStandardCardSize(...)`, `initCardSizeSettings(...)`, `loadCardData(...)`
+    - `Pages/Creator.cshtml`: `#settings-card-size-profile`, `#settings-card-width`, `#settings-card-height`, `#settings-load-override-size`
+
+- `validation tab`, `invalid cards`, `set to selected profile`
+    - `wwwroot/js/creator-23.js`: `refreshLocalValidation(...)`, `refreshServerValidation(...)`, `renderValidationResults(...)`, `setInvalidLocalCardsToSelectedProfile(...)`, `setAllLocalCardsToSelectedProfile(...)`
+    - `Pages/Creator.cshtml`: `#creator-menu-validation`, `#validation-local-results`, `#validation-server-results`
+    - `css/style-9.css`: `.validation-*`
+
+- `loaded card info`, `art url`, `create new`, `preview info box`
+    - `wwwroot/js/creator-23.js`: `updateCreatorPreviewInfo(...)`, `createNewCardFromPreview(...)`, `loadCardData(...)`, `artEdited(...)`
+    - `Pages/Creator.cshtml`: `#creator-info-size`, `#creator-info-loaded-name`, `#creator-info-art-url`
+
+## Domain Glossary (Canonical Terms)
+- **Cut size**: saved `width` x `height` without margins.
+- **Bleed size**: rendered size with margins (`cut * (1 + 2 * margin)`).
+- **Safe size**: inner text-safe region from selected profile (`profile.safe`).
+- **Margin frame**: mode where `card.margins = true` and margins/bleed are active.
+- **Print image**: download mode including bleed (`#download-print-image`).
+- **Profile overlay**: editor guide (cut/safe) that is suppressed in final download output.
+
+## Where To Look First
+- App startup/routes: `Program.cs`
+- Creator markup: `Pages/Creator.cshtml`
+- Main Creator behavior: `wwwroot/js/creator-23.js`
+- Shared layout: `Pages/Shared/_Layout.cshtml`
+- Asset APIs/storage: `Endpoints/AssetEndpoints.cs`, `Services/Assets/FileSystemAssetStorageService.cs`, `Models/Assets/*`
+- Import normalization: `Endpoints/ImportNormalizationEndpoints.cs`, `Services/ImportNormalization/CardImportNormalizationService.cs`, `Models/ImportNormalization/ImportNormalizationContracts.cs`
+
+## Triage Rule For Creator Requests
+1) Confirm target UI element ID exists in `Pages/Creator.cshtml`.
+2) Confirm matching selector/function exists in `wwwroot/js/creator-23.js`.
+3) Confirm CSS class/layout behavior in `css/style-9.css`.
+4) Check for feature interactions (size profile, margin frame, overlay suppression, validation caches).
+
+## Architecture And Data Flow
+- Creator uses direct `fetch(...)` calls to server APIs (assets/cards/import normalization/card-image).
+- Asset uploads are filesystem-backed (`data/uploads`), served via `/user-content`.
+- Art uploads use hash-based duplicate detection (`409`) in `FileSystemAssetStorageService`.
+- `POST /api/cards/prepare-localstorage-upload` preserves raw client card JSON plus normalized import payload.
+
+## Project-Specific Conventions
+- Creator remains JS-driven and markup-heavy; keep logic in `creator-23.js` unless server behavior is required.
+- For user-facing static assets referenced by Razor (`/js`, `/css`, `/img`), update `wwwroot/` first; mirror legacy root copies if needed.
+- Preserve Scryfall contract field names via `[JsonPropertyName(...)]`.
+- Import normalization style is regex/string transform oriented; match existing style.
+- **Changelog discipline**: every major feature/behavior change/user-visible fix must add one entry in `CHANGELOG.md` in the same PR/commit.
+- **Changelog format**: 1-2 lines per entry under `## Unreleased` -> `Added` / `Changed` / `Fixed`.
+
+## Local Workflows
+- Primary run path:
 ```powershell
 dotnet run
 ```
-- Useful verification commands:
-```powershell
+• Useful verification:
 dotnet build
 docker compose up -d
-```
-- The checked-in request files `asset-upload.http` and `import-normalization.http` are the fastest way to smoke-test the server APIs.
-- No dedicated test project was found. After changes, at minimum run `dotnet build` and manually exercise the affected page/API flow.
+• Fast API smoke tests: asset-upload.http, import-normalization.http
+• No dedicated test project currently; at minimum run build + manual affected flow checks.
 
-## Debugging notes
-- `launcher.py` is a legacy static file server for the old site layout; it will not exercise the ASP.NET minimal APIs that current uploads/import endpoints depend on.
-- `wwwroot/local_art/` is a special bypass for large local images; the asset API also merges those files into `GET /api/assets/art-sources`.
-- If an upload or asset list looks wrong, inspect both the configured `Storage` values in `appsettings.json` and the normalized URL/path handling in `FileSystemAssetStorageService`.
+Debugging Notes
+• launcher.py is legacy static hosting and does not exercise ASP.NET minimal APIs.
+• wwwroot/local_art/ is a bypass path for large local images and is merged into art-source listing.
+• If asset behavior looks wrong, inspect both storage config in appsettings.json and path/URL normalization in FileSystemAssetStorageService.

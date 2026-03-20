@@ -743,6 +743,46 @@ textarea.input {
 	height: auto;
 	/*backdrop-filter: hue-rotate(80deg);*/
 }
+
+.creator-preview-column {
+	width: 100%;
+	max-width: 750px;
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+
+.creator-preview-footer {
+	width: 100%;
+	display: grid;
+	grid-template-columns: 2fr 1fr;
+	gap: 0.6rem;
+	padding: 0.6rem;
+	align-items: stretch;
+}
+
+.creator-preview-info {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	min-width: 0;
+}
+
+.creator-preview-info h5 {
+	margin: 0;
+	line-height: 1.35;
+	word-break: break-word;
+}
+
+.creator-preview-action {
+	display: flex;
+	align-items: stretch;
+}
+
+.creator-preview-action .input {
+	width: 100%;
+	height: 100%;
+}
 .creator-menu {
 	width: 100%;
 }
@@ -787,7 +827,12 @@ textarea.input {
 .validation-results-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-	grid-gap: 0.5rem;
+	grid-gap: 0.75rem;
+}
+
+.validation-actions-grid {
+	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)) !important;
+	align-items: stretch;
 }
 
 .validation-result-card {
@@ -796,7 +841,9 @@ textarea.input {
 	border-top: 0.25rem solid #6d6d6d;
 	display: flex;
 	flex-direction: column;
-	gap: 0.4rem;
+	gap: 0.65rem;
+	border-radius: 0.35rem;
+	box-shadow: 0 0.15rem 0.45rem #00000018;
 }
 
 .validation-result-card.invalid {
@@ -851,9 +898,37 @@ textarea.input {
 	font-size: 0.95rem;
 }
 
+.validation-result-body {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
 .validation-result-card p,
 .validation-result-empty {
 	font-size: 0.95rem;
+	color: var(--font-color-2);
+}
+
+.validation-result-details {
+	line-height: 1.4;
+}
+
+.validation-result-row {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	padding-top: 0.35rem;
+	border-top: 1px solid #00000022;
+	font-size: 0.95rem;
+	color: var(--font-color-2);
+}
+
+.validation-result-label {
+	font-size: 0.8rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 	color: var(--font-color-2);
 }
 
@@ -861,8 +936,14 @@ textarea.input {
 	.import-save-actions-grid {
 		grid-template-columns: 1fr !important;
 	}
+	.creator-preview-footer {
+		grid-template-columns: 1fr;
+	}
 	.frame-options-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
+	.validation-actions-grid {
+		grid-template-columns: 1fr !important;
 	}
 }
 

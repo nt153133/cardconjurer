@@ -102,7 +102,19 @@
 		</div>
 		<!-- Regular stuff -->
 		<div class='creator-grid margin-bottom-large'>
-			<canvas class='creator-canvas box-shadow' id='previewCanvas' width='1005' height='1407'></canvas>
+			<div class='creator-preview-column'>
+				<canvas class='creator-canvas box-shadow' id='previewCanvas' width='1005' height='1407'></canvas>
+				<div class='creator-preview-footer readable-background box-shadow'>
+					<div class='creator-preview-info'>
+						<h5 class='input-description'>Current Size: <span id='creator-info-size'>1005 x 1407 px</span></h5>
+						<h5 class='input-description'>Loaded Name: <span id='creator-info-loaded-name'>Not loaded</span></h5>
+						<h5 class='input-description'>Art URL: <span id='creator-info-art-url'>/img/blank.png</span></h5>
+					</div>
+					<div class='creator-preview-action'>
+						<button class='input' onclick='createNewCardFromPreview();'>Create New</button>
+					</div>
+				</div>
+			</div>
 			<div class='creator-menu box-shadow'>
 				<div id='creator-menu-tabs' class='creator-menu-tabs'>
 					<h3 class='selectable readable-background selected' onclick='toggleCreatorTabs(event, "frame")'>Frame</h3>
@@ -808,6 +820,10 @@
 					<div id='creator-menu-validation' class='hidden'>
 						<div class='readable-background padding margin-bottom'>
 							<h5 class='padding margin-bottom input-description'>Validate saved cards against known card size profiles.</h5>
+							<div class='input-grid validation-actions-grid margin-bottom'>
+								<button class='input' onclick='setInvalidLocalCardsToSelectedProfile();'>Set Invalid Cards to Selected Profile</button>
+								<button class='input' onclick='setAllLocalCardsToSelectedProfile();'>Set all saved cards to selected profile</button>
+							</div>
 							<h5 id='validation-local-summary' class='padding margin-bottom input-description'>Loading local validation...</h5>
 							<div id='validation-local-results' class='validation-results-grid'></div>
 						</div>

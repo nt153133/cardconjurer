@@ -6,6 +6,8 @@ All notable product-facing changes should be added here.
 
 ### Added
 - Validation workflow in Creator: added a `Validation` tab and local/server validation result sections wired to existing validation logic.
+- Validation bulk-fix actions: added buttons to update invalid local cards or all local saved cards to the currently selected size profile.
+- Creator preview info strip: added an under-canvas box showing current size, loaded saved name, and art URL, plus a `Create New` action button.
 - Card size profile controls in Frame: restored profile selector, width/height inputs, apply/reset actions, and load override toggle.
 - Print download option: added `Download print version (includes bleed)` toggle and wired it to server render payload.
 - Git history import: added card import normalization service (`f763650`, `feat(import-normalization)`).
@@ -20,6 +22,7 @@ All notable product-facing changes should be added here.
 
 ### Changed
 - Frame options layout: grouped `Rounded Corners`, `Guidelines`, and `Transparencies` on one line and added `Show Cut/Safe Overlay` toggle.
+- Validation review output now renders as spaced flowing cards with structured details instead of dense unseparated text.
 - Profile placement overlay behavior: mode-aware rendering now draws safe only in cut mode, and cut + safe in bleed mode.
 - Download rendering behavior: profile overlay remains visible in editor preview but is suppressed during output generation.
 - Card-size updates now automatically reapply an active Margin frame after `Apply card size` and load-with-selected-size-profile flows.

@@ -256,6 +256,42 @@ document.querySelector("#info-year").value = card.infoYear;
 
 var loadedVersions = [];
 var suppressProfilePlacementOverlay = false;
+var _currentLoadedCardName = '';
+
+function truncateInfoText(value, maxLength = 96) {
+    var text = String(value || '');
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return text.slice(0, maxLength - 3) + '...';
+}
+
+function updateCreatorPreviewInfo() {
+    var sizeEl = document.querySelector('#creator-info-size');
+    var nameEl = document.querySelector('#creator-info-loaded-name');
+    var artEl = document.querySelector('#creator-info-art-url');
+    if (!sizeEl || !nameEl || !artEl) {
+        return;
+    }
+
+    var width = Number(card && card.width) || 0;
+    var height = Number(card && card.height) || 0;
+    sizeEl.textContent = width + ' x ' + height + ' px';
+
+    nameEl.textContent = _currentLoadedCardName || 'Not loaded';
+    nameEl.title = _currentLoadedCardName || '';
+
+    var artUrl = card && card.artSource ? String(card.artSource) : '/img/blank.png';
+    artEl.textContent = truncateInfoText(artUrl);
+    artEl.title = artUrl;
+}
+
+function createNewCardFromPreview() {
+    if (!confirm('Create a new card? Unsaved changes will be lost.')) {
+        return;
+    }
+    window.location.reload();
+}
 
 //Card Object managament
 async function resetCardIrregularities(options = {}) {
@@ -6283,6 +6319,7 @@ function drawCard() {
     // show preview
     previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
     previewContext.drawImage(cardCanvas, 0, 0, previewCanvas.width, previewCanvas.height);
+    updateCreatorPreviewInfo();
 
     if (window.cardDrawingPromiseResolver) {
         window.cardDrawingPromiseResolver();
@@ -7715,6 +7752,7 @@ function loadAvailableCards(cardKeys = getLocalCardKeys()) {
 }
 
 var CARD_SIZE_VALIDATION_TOLERANCE_PX = 2;
+var _lastLocalValidationEntries = [];
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -7849,6 +7887,158 @@ function inferCardSizeValidation(cardData) {
     };
 }
 
+function getLocalValidationEntries() {
+    var keys = getLocalCardKeys().slice().sort();
+    var entries = [];
+    keys.forEach(function(key) {
+        try {
+            var data = readLocalCardData(key);
+            if (!data) {
+                return;
+            }
+            entries.push({
+                key: key,
+                name: key,
+                data: data,
+                validation: inferCardSizeValidation(data)
+            });
+        } catch (error) {
+            entries.push({
+                key: key,
+                name: key,
+                data: null,
+                validation: {
+                    invalid: true,
+                    status: 'Unreadable card',
+                    metrics: {cutWidth: 0, cutHeight: 0, bleedWidth: 0, bleedHeight: 0, marginX: 0, marginY: 0},
+                    cutMatches: [],
+                    bleedMatches: [],
+                    exactMatches: [],
+                    details: 'Failed to read saved card JSON: ' + error
+                }
+            });
+        }
+    });
+    return entries;
+}
+
+function normalizeMarginScale(marginScale) {
+    if (marginScale == null) {
+        return null;
+    }
+    if (typeof marginScale === 'number' && Number.isFinite(marginScale)) {
+        return {x: marginScale, y: marginScale};
+    }
+
+    var x = Number(marginScale.x);
+    var y = Number(marginScale.y);
+    var uniform = Number(marginScale.uniform);
+
+    if (!Number.isFinite(x) && Number.isFinite(uniform)) {
+        x = uniform;
+    }
+    if (!Number.isFinite(y) && Number.isFinite(uniform)) {
+        y = uniform;
+    }
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return null;
+    }
+
+    return {x: x, y: y};
+}
+
+function applySelectedProfileSizeToSavedCard(cardData, profile, normalizedMarginScale) {
+    if (!cardData || !profile || !profile.cut) {
+        return cardData;
+    }
+
+    cardData.width = Number(profile.cut.width);
+    cardData.height = Number(profile.cut.height);
+
+    var shouldKeepMargins = !!cardData.margins || (Number(cardData.marginX) || 0) > 0 || (Number(cardData.marginY) || 0) > 0;
+    if (shouldKeepMargins && normalizedMarginScale) {
+        cardData.marginX = normalizedMarginScale.x;
+        cardData.marginY = normalizedMarginScale.y;
+        cardData.margins = true;
+    } else {
+        cardData.marginX = 0;
+        cardData.marginY = 0;
+        cardData.margins = false;
+    }
+
+    return cardData;
+}
+
+async function updateLocalSavedCardsToSelectedProfile(includeOnlyInvalid) {
+    if (!(await ensureCardSizeProfilesAvailable())) {
+        notify('Validation cannot update saved cards until size profiles are available.', 5);
+        return;
+    }
+
+    var selectedProfile = getSelectedCardSizeProfile();
+    if (!selectedProfile || !selectedProfile.cut) {
+        notify('Select a card size profile on the Frame tab first.', 4);
+        return;
+    }
+
+    var normalizedMarginScale = normalizeMarginScale(getSelectedCardSizeMarginScale());
+    var entries = includeOnlyInvalid && _lastLocalValidationEntries.length
+        ? _lastLocalValidationEntries.slice()
+        : getLocalValidationEntries();
+    _lastLocalValidationEntries = entries;
+
+    var targetEntries = entries.filter(function(entry) {
+        if (!entry || !entry.key || !entry.data) {
+            return false;
+        }
+        return includeOnlyInvalid ? !!(entry.validation && entry.validation.invalid) : true;
+    });
+
+    if (!targetEntries.length) {
+        notify(includeOnlyInvalid ? 'No invalid local cards need review.' : 'No readable local cards were found to update.', 4);
+        await refreshLocalValidation();
+        return;
+    }
+
+    var updatedCount = 0;
+    var failedKeys = [];
+    targetEntries.forEach(function(entry) {
+        try {
+            var updatedData = applySelectedProfileSizeToSavedCard(JSON.parse(JSON.stringify(entry.data)), selectedProfile, normalizedMarginScale);
+            localStorage.setItem(entry.key, JSON.stringify(updatedData));
+            updatedCount++;
+        } catch (error) {
+            console.error('Failed to update local card to selected profile:', entry.key, error);
+            failedKeys.push(entry.key);
+        }
+    });
+
+    await refreshLocalValidation();
+
+    if (failedKeys.length) {
+        notify(
+            'Updated ' + updatedCount + ' local card(s), but failed to update: ' + failedKeys.join(', '),
+            5
+        );
+        return;
+    }
+
+    notify(
+        (includeOnlyInvalid ? 'Updated invalid local cards' : 'Updated all local cards')
+        + ' to ' + selectedProfile.name + ' (' + updatedCount + ' total).',
+        4
+    );
+}
+
+async function setInvalidLocalCardsToSelectedProfile() {
+    await updateLocalSavedCardsToSelectedProfile(true);
+}
+
+async function setAllLocalCardsToSelectedProfile() {
+    await updateLocalSavedCardsToSelectedProfile(false);
+}
+
 function renderValidationResults(summarySelector, resultsSelector, sourceLabel, entries) {
     var summaryEl = document.querySelector(summarySelector);
     var resultsEl = document.querySelector(resultsSelector);
@@ -7895,9 +8085,11 @@ function renderValidationResults(summarySelector, resultsSelector, sourceLabel, 
                 '<div class="validation-metric"><span>Calculated with margin</span><strong>' + escapeHtml(metrics.bleedWidth + ' × ' + metrics.bleedHeight + ' px') + '</strong></div>' +
                 '<div class="validation-metric"><span>Margins</span><strong>' + escapeHtml((metrics.marginX * 100).toFixed(2) + '% × ' + (metrics.marginY * 100).toFixed(2) + '%') + '</strong></div>' +
             '</div>' +
-            '<p>' + escapeHtml(validation.details) + '</p>' +
-            '<p>Cut matches: ' + escapeHtml(cutMatches.length ? cutMatches.join(', ') : 'None') + '</p>' +
-            '<p>Size with margin matches: ' + escapeHtml(bleedMatches.length ? bleedMatches.join(', ') : 'None') + '</p>';
+            '<div class="validation-result-body">' +
+                '<p class="validation-result-details">' + escapeHtml(validation.details) + '</p>' +
+                '<div class="validation-result-row"><span class="validation-result-label">Cut matches</span><span>' + escapeHtml(cutMatches.length ? cutMatches.join(', ') : 'None') + '</span></div>' +
+                '<div class="validation-result-row"><span class="validation-result-label">Size with margin matches</span><span>' + escapeHtml(bleedMatches.length ? bleedMatches.join(', ') : 'None') + '</span></div>' +
+            '</div>';
 
         resultsEl.appendChild(card);
     });
@@ -7920,33 +8112,8 @@ async function refreshLocalValidation() {
         return;
     }
 
-    var keys = getLocalCardKeys().slice().sort();
-    var entries = [];
-    keys.forEach(function(key) {
-        try {
-            var data = readLocalCardData(key);
-            if (!data) {
-                return;
-            }
-            entries.push({
-                name: key,
-                validation: inferCardSizeValidation(data)
-            });
-        } catch (error) {
-            entries.push({
-                name: key,
-                validation: {
-                    invalid: true,
-                    status: 'Unreadable card',
-                    metrics: {cutWidth: 0, cutHeight: 0, bleedWidth: 0, bleedHeight: 0, marginX: 0, marginY: 0},
-                    cutMatches: [],
-                    bleedMatches: [],
-                    exactMatches: [],
-                    details: 'Failed to read saved card JSON: ' + error
-                }
-            });
-        }
-    });
+    var entries = getLocalValidationEntries();
+    _lastLocalValidationEntries = entries;
 
     renderValidationResults('#validation-local-summary', '#validation-local-results', 'Local', entries);
 }
@@ -8275,6 +8442,9 @@ async function loadCardData(cardData, label = 'selected card') {
     card = cardData ? JSON.parse(JSON.stringify(cardData)) : null;
     //if the card was loaded properly...
     if (card) {
+        if (label && label !== 'selected card') {
+            _currentLoadedCardName = String(label);
+        }
         var shouldReapplyMarginFrame = false;
         var previousMarginScale = null;
         var overriddenLoadedCardSize = null;
@@ -9055,6 +9225,7 @@ refreshFrameLibrarySelect();
 refreshSetSymbolLibrarySelect();
 refreshWatermarkLibrarySelect();
 initCardSizeSettings();
+updateCreatorPreviewInfo();
 
 // =====================
 // ASSET LIBRARY TAB
