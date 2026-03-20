@@ -796,12 +796,19 @@
 							</div>
 						</div>
 						<div class='readable-background padding margin-bottom'>
-							<h5 class='padding margin-bottom input-description'>Download all saved cards as a file</h5>
-							<button class='input margin-bottom' onclick='downloadSavedCards();'>Download Cards File</button>
-							<h5 class='padding margin-bottom input-description'>Download all saved card images as a zip file(can take a long time)</h5>
-							<button class='input margin-bottom' onclick="bulkDownloadZip();">Download All Images</button>
-							<h5 class='padding margin-bottom input-description'>Upload previously downloaded file of saved cards (downloaded from above)</h5>
-							<input type='file' accept='.cardconjurer,.txt' class='input margin-bottom' oninput='uploadSavedCards(event);' aria-label='Upload saved cards file'>
+							<div class='input-grid import-save-actions-grid margin-bottom'>
+								<div class='import-save-action-card'>
+									<h5 class='padding margin-bottom input-description'>Download all saved card images as a zip file (can take a long time)</h5>
+									<button class='input margin-bottom' onclick="bulkDownloadZip();">Download All Images</button>
+									<button class='input margin-bottom' onclick="bulkDownloadZipWithPrintBleed();">Download All Images (Print Bleed)</button>
+								</div>
+								<div class='import-save-action-card'>
+									<h5 class='padding margin-bottom input-description'>Download all saved cards as a file</h5>
+									<button class='input margin-bottom' onclick='downloadSavedCards();'>Download Cards File</button>
+									<h5 class='padding margin-bottom input-description'>Upload previously downloaded file of saved cards</h5>
+									<input type='file' accept='.cardconjurer,.txt' class='input margin-bottom' oninput='uploadSavedCards(event);' aria-label='Upload saved cards file'>
+								</div>
+							</div>
 							<h5 class='padding margin-bottom input-description'>Delete ALL saved cards</h5>
 							<button class='input margin-bottom' onclick='deleteSavedCards();'>Delete All</button>
 						</div>

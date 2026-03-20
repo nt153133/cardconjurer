@@ -1417,15 +1417,28 @@ function setAutoframeNyx(value) {
 var autoFramePack;
 
 function autoFrame() {
-    var frame = document.querySelector('#autoFrame').value;
-    if (frame == 'false') {
+    var frame = document.querySelector('#autoFrame')?.value;
+    if (!frame || frame == 'false') {
         autoFramePack = null;
         return;
     }
 
+    // Guard: autoFrame requires key text fields to exist on the current card.
+    // Without this, accessing .text on undefined throws before autoFramePack is
+    // ever set, which causes loadScript to be called on every keystroke.
+    if (!card.text || !card.text.type || !card.text.mana) {
+        return;
+    }
+
+    // Read text fields with safe fallbacks so no field being missing can throw.
+    var typeText  = card.text.type?.text  ?? '';
+    var manaText  = card.text.mana?.text  ?? '';
+    var rulesText = card.text.rules?.text ?? '';
+    var ptText    = card.text.pt?.text    ?? '';
+
     var colors = [];
-    if (card.text.type.text.toLowerCase().includes('land')) {
-        var rules = card.text.rules.text;
+    if (typeText.toLowerCase().includes('land')) {
+        var rules = rulesText;
         var flavorIndex = rules.indexOf('{flavor}');
         if (flavorIndex == -1) {
             flavorIndex = rules.indexOf('{oldflavor}');
@@ -1453,19 +1466,19 @@ function autoFrame() {
             }
         });
 
-        if (!colors.includes('W') && (rules.toLowerCase().includes('plains') || card.text.type.text.toLowerCase().includes('plains'))) {
+        if (!colors.includes('W') && (rules.toLowerCase().includes('plains') || typeText.toLowerCase().includes('plains'))) {
             colors.push('W');
         }
-        if (!colors.includes('U') && (rules.toLowerCase().includes('island') || card.text.type.text.toLowerCase().includes('island'))) {
+        if (!colors.includes('U') && (rules.toLowerCase().includes('island') || typeText.toLowerCase().includes('island'))) {
             colors.push('U');
         }
-        if (!colors.includes('B') && (rules.toLowerCase().includes('swamp') || card.text.type.text.toLowerCase().includes('swamp'))) {
+        if (!colors.includes('B') && (rules.toLowerCase().includes('swamp') || typeText.toLowerCase().includes('swamp'))) {
             colors.push('B');
         }
-        if (!colors.includes('R') && (rules.toLowerCase().includes('mountain') || card.text.type.text.toLowerCase().includes('mountain'))) {
+        if (!colors.includes('R') && (rules.toLowerCase().includes('mountain') || typeText.toLowerCase().includes('mountain'))) {
             colors.push('R');
         }
-        if (!colors.includes('G') && (rules.toLowerCase().includes('forest') || card.text.type.text.toLowerCase().includes('forest'))) {
+        if (!colors.includes('G') && (rules.toLowerCase().includes('forest') || typeText.toLowerCase().includes('forest'))) {
             colors.push('G');
         }
 
@@ -1482,66 +1495,69 @@ function autoFrame() {
             colors = ['W', 'U', 'B', 'R', 'G'];
         }
 
-
     } else {
-        colors = [...new Set(card.text.mana.text.toUpperCase().split('').filter(char => ['W', 'U', 'B', 'R', 'G'].includes(char)))];
+        colors = [...new Set(manaText.toUpperCase().split('').filter(char => ['W', 'U', 'B', 'R', 'G'].includes(char)))];
+    }
+
+    // Load the pack script before calling the frame function.
+    // Doing this first ensures autoFramePack is always set even if the
+    // frame function throws, preventing the pack from being reloaded on
+    // every subsequent keystroke.
+    if (autoFramePack != frame) {
+        loadScript('/js/frames/pack' + frame + '.js');
+        autoFramePack = frame;
     }
 
     var group;
     if (frame == 'M15Regular-1') {
-        autoM15Frame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoM15Frame(colors, manaText, typeText, ptText);
         group = 'Standard-3';
     } else if (frame == 'M15RegularNew') {
-        autoM15NewFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoM15NewFrame(colors, manaText, typeText, ptText);
         group = 'Accurate';
     } else if (frame == 'M15Eighth') {
-        autoM15EighthFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoM15EighthFrame(colors, manaText, typeText, ptText);
         group = 'Custom';
     } else if (frame == 'M15EighthUB') {
-        autoM15EighthUBFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoM15EighthUBFrame(colors, manaText, typeText, ptText);
         group = 'Custom';
     } else if (frame == 'UB') {
-        autoUBFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoUBFrame(colors, manaText, typeText, ptText);
         group = 'Showcase-5';
     } else if (frame == 'UBNew') {
-        autoUBNewFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoUBNewFrame(colors, manaText, typeText, ptText);
         group = 'Accurate';
     } else if (frame == 'FullArtNew') {
-        autoFullArtNewFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoFullArtNewFrame(colors, manaText, typeText, ptText);
         group = 'Accurate';
     } else if (frame == 'Circuit') {
-        autoCircuitFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoCircuitFrame(colors, manaText, typeText, ptText);
         group = 'Custom';
     } else if (frame == 'Etched') {
         group = 'Showcase-5';
-        autoEtchedFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoEtchedFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'Praetors') {
         group = 'Showcase-5';
-        autoPhyrexianFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoPhyrexianFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'Seventh') {
         group = 'Misc-2';
-        autoSeventhEditionFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoSeventhEditionFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'M15BoxTopper') {
         group = 'Showcase-5';
-        autoExtendedArtFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text, false);
+        autoExtendedArtFrame(colors, manaText, typeText, ptText, false);
     } else if (frame == 'M15ExtendedArtShort') {
         group = 'Showcase-5';
-        autoExtendedArtFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text, true);
+        autoExtendedArtFrame(colors, manaText, typeText, ptText, true);
     } else if (frame == '8th') {
         group = 'Misc-2';
-        auto8thEditionFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        auto8thEditionFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'Borderless') {
         group = 'Showcase-5';
-        autoBorderlessFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoBorderlessFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'BorderlessUB') {
         group = 'Showcase-5';
-        autoBorderlessUBFrame(colors, card.text.mana.text, card.text.type.text, card.text.pt.text);
+        autoBorderlessUBFrame(colors, manaText, typeText, ptText);
         frame = 'Borderless';
-    }
-
-    if (autoFramePack != frame) {
-        loadScript('/js/frames/pack' + frame + '.js');
-        autoFramePack = frame;
     }
 }
 
@@ -4279,7 +4295,7 @@ function loadTextOptions(textObject, replace = true) {
 function textOptionClicked(event) {
     selectedTextIndex = getElementIndex(event.target);
     document.querySelector('#text-editor').value = Object.entries(card.text)[selectedTextIndex][1].text;
-    document.querySelector('#text-editor-font-size').value = Object.entries(card.text)[selectedTextIndex][1].fontSize;
+    document.querySelector('#text-editor-font-size').value = Object.entries(card.text)[selectedTextIndex][1].fontSize ?? 0;
     selectSelectable(event);
 }
 
@@ -6417,7 +6433,7 @@ async function downloadCard(alt = false, jpeg = false) {
     }
 }
 
-async function bulkDownloadZip() {
+async function bulkDownloadZip(isPrintImage = false) {
     // 1. Initial checks for libraries and saved cards.
     if (typeof JSZip === 'undefined') {
         notify('Required library (JSZip) has not loaded yet. Please wait a moment and try again.', 5);
@@ -6429,6 +6445,8 @@ async function bulkDownloadZip() {
         return;
     }
 
+    const zipFileName = isPrintImage ? 'CardConjurer_Bulk_PrintBleed.zip' : BULK_ZIP_FILENAME;
+
     let fileHandle = null;
     let useStreaming = false;
 
@@ -6437,7 +6455,7 @@ async function bulkDownloadZip() {
         try {
             notify('Please choose a location to save your ZIP file.', 15);
             fileHandle = await window.showSaveFilePicker({
-                suggestedName: BULK_ZIP_FILENAME,
+                suggestedName: zipFileName,
                 types: [{
                     description: 'ZIP file',
                     accept: {'application/zip': ['.zip']},
@@ -6445,18 +6463,16 @@ async function bulkDownloadZip() {
             });
             useStreaming = true;
         } catch (err) {
-            // This error occurs if the user clicks "Cancel" in the save dialog.
             if (err.name === 'AbortError') {
                 notify('Save operation cancelled.', 3);
-                return; // Exit the function entirely if the user cancels.
+                return;
             }
-            // If another error occurs, fall back to the in-memory method.
-            logError("Could not get file handle, falling back to in-memory method:", err);
+            logError('Could not get file handle, falling back to in-memory method:', err);
         }
     }
 
     // 3. Save the current state and prepare the zip object.
-    notify(`Preparing to process ${cardKeys.length} cards...`, 10);
+    notify(`Preparing to process ${cardKeys.length} cards${isPrintImage ? ' (print bleed)' : ''}...`, 10);
     const zip = new JSZip();
     const tempKey = '__temp_current_card_state__';
     const cardToSave = JSON.parse(JSON.stringify(card));
@@ -6465,6 +6481,10 @@ async function bulkDownloadZip() {
         frame.masks.forEach(mask => delete mask.image);
     });
     localStorage.setItem(tempKey, JSON.stringify(cardToSave));
+
+    // Suppress placement overlay so it never appears in any output frame.
+    const previousOverlaySuppression = suppressProfilePlacementOverlay;
+    suppressProfilePlacementOverlay = true;
 
     // 4. Loop through each saved card to render and add it to the zip object.
     for (const [index, key] of cardKeys.entries()) {
@@ -6483,9 +6503,38 @@ async function bulkDownloadZip() {
             drawCard();
 
             const imageName = getCardName() + '.png';
-            const imageData = cardCanvas.toDataURL('image/png').split(',')[1];
 
-            zip.file(imageName, imageData, {base64: true});
+            if (isPrintImage) {
+                // Route through the server renderer so it can apply bleed cropping/embedding.
+                const selectedProfile = getSelectedCardSizeProfile();
+                const cardSizeProfileName = selectedProfile && selectedProfile.name ? selectedProfile.name : null;
+                const imageBase64 = cardCanvas.toDataURL('image/png').split(',')[1];
+                const cardJson = serializeCurrentCardState();
+
+                const response = await fetch('/api/card-image/render', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        imageBase64: imageBase64,
+                        cardJson: cardJson,
+                        fileName: getCardName(),
+                        format: 'png',
+                        cardSizeProfileName: cardSizeProfileName,
+                        isPrintImage: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Server render returned HTTP ' + response.status);
+                }
+
+                const blob = await response.blob();
+                zip.file(imageName, blob);
+            } else {
+                const imageData = cardCanvas.toDataURL('image/png').split(',')[1];
+                zip.file(imageName, imageData, {base64: true});
+            }
+
             logDebug(`Zipped: ${imageName}`);
 
         } catch (error) {
@@ -6500,7 +6549,6 @@ async function bulkDownloadZip() {
     // 5. Generate and save the ZIP file using the appropriate method.
     try {
         if (useStreaming && fileHandle) {
-            // Ideal Path: Manually pump the JSZip stream to the WritableStream.
             notify('Saving ZIP file to disk...', 10);
             const writable = await fileHandle.createWritable();
 
@@ -6522,13 +6570,12 @@ async function bulkDownloadZip() {
             notify('ZIP file saved successfully!', 5);
 
         } else {
-            // Fallback Path: For browsers without streaming support.
             notify('Streaming not supported. Building ZIP in memory... This may be slow or fail.', 10);
             const content = await zip.generateAsync({type: 'blob'});
 
             const downloadElement = document.createElement('a');
             downloadElement.href = URL.createObjectURL(content);
-            downloadElement.download = BULK_ZIP_FILENAME;
+            downloadElement.download = zipFileName;
             document.body.appendChild(downloadElement);
             downloadElement.click();
             document.body.removeChild(downloadElement);
@@ -6538,10 +6585,16 @@ async function bulkDownloadZip() {
         notify('An error occurred while saving the ZIP file.', 5);
     }
 
-    // 6. Restore the user's original card state.
+    // 6. Restore the user's original card state and overlay suppression.
+    suppressProfilePlacementOverlay = previousOverlaySuppression;
     await loadCard(tempKey);
     localStorage.removeItem(tempKey);
+    drawCard();
     logDebug('Bulk download process finished. User state restored.');
+}
+
+async function bulkDownloadZipWithPrintBleed() {
+    await bulkDownloadZip(true);
 }
 
 //IMPORT/SAVE TAB
