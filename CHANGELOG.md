@@ -31,6 +31,8 @@ All notable product-facing changes should be added here.
 - Creator script structure: moved Set Symbol tab behavior and `drawSetSymbol(...)` into `wwwroot/js/creator/set-symbol-tab.js` and kept existing tab handlers unchanged.
 - Creator script structure: moved Watermark tab behavior (upload/select/edit/reset and set-code SVG watermark import) into `wwwroot/js/creator/watermark-tab.js`.
 - Creator script structure: moved Collector tab behavior (bottom info style/rendering, serial controls, artist sync, and collector defaults/toggles) into `wwwroot/js/creator/collector-tab.js`.
+- Creator script structure: applied safe Frame-tab follow-up split (`wwwroot/js/creator/frameTab.js`) as namespaced picker helpers only, avoiding runtime overrides like `addFrame(...)`.
+- Creator script structure: centralized asset server upload/list/select operations into `wwwroot/js/creator/asset-library.js` and delegated art/frame/set-symbol/watermark library calls to it.
 - Import/Save download and upload controls regrouped into paired action cards: image downloads (both normal and print-bleed) on one side, cards-file download and upload on the other.
 - Frame options layout: grouped `Rounded Corners`, `Guidelines`, and `Transparencies` on one line and added `Show Cut/Safe Overlay` toggle.
 - Validation review output now renders as spaced flowing cards with structured details instead of dense unseparated text.

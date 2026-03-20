@@ -4016,40 +4016,14 @@ async function uploadFrameFilesToServer(filesRaw) {
 }
 
 async function refreshFrameLibrarySelect() {
-    const select = document.querySelector('#frame-library-select');
-    if (!select) {
-        return;
-    }
-
-    select.innerHTML = '<option value="" selected="selected">None selected</option>';
-
-    try {
-        const response = await fetch('/api/assets/sources/frames');
-        if (!response.ok) {
-            throw new Error('Failed to load frame list (' + response.status + ')');
-        }
-
-        const items = await response.json();
-        items.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.url;
-            option.innerText = item.name;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Could not load uploaded frames:', error);
-        const option = document.createElement('option');
-        option.value = '';
-        option.innerText = 'Failed to load uploaded frames';
-        select.appendChild(option);
-    }
+    await creatorAssetLibrary.refreshLibrarySelect('#frame-library-select', 'frames', {
+        noneText: 'None selected',
+        errorText: 'Failed to load uploaded frames'
+    });
 }
 
 function selectFrameLibrarySource(element) {
-    if (!element || !element.value) {
-        return;
-    }
-    uploadFrameOption(element.value);
+    creatorAssetLibrary.selectLibrarySource(element, uploadFrameOption);
 }
 
 function hsl(canvas, inputH, inputS, inputL) {
@@ -5385,88 +5359,27 @@ async function uploadArtFilesToServer(filesRaw, otherParams = '') {
 }
 
 async function uploadFilesToServerByKind(filesRaw, kind, destination, otherParams = '', refreshCallback = null, artDuplicateCheck = false) {
-    var files = ([...filesRaw]);
-    if (files.length > 9) {
-        if (!confirm('You are uploading ' + files.length + ' images. Would you like to continue?')) {
-            return;
-        }
-    }
-
-    for (const file of files) {
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('nameHint', file.name);
-
-            const response = await fetch('/api/assets/upload/' + kind, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                if (artDuplicateCheck && response.status == 409) {
-                    notify('This art already exists on the server (same file hash).', 5);
-                    continue;
-                }
-                throw new Error('Upload failed with status ' + response.status);
-            }
-
-            const result = await response.json();
-            destination(result.url, otherParams);
-        } catch (error) {
-            console.error(kind + ' upload failed:', error);
-            notify('Upload failed. Falling back to local browser upload for this file.', 5);
-            var reader = new FileReader();
-            reader.onloadend = function () {
-                destination(reader.result, otherParams);
-            }
-            reader.onerror = function () {
-                destination('/img/blank.png', otherParams);
-            }
-            reader.readAsDataURL(file);
-        }
-    }
-
-    if (refreshCallback) {
-        refreshCallback();
-    }
+    await creatorAssetLibrary.uploadFilesToServerByKind(
+        filesRaw,
+        kind,
+        destination,
+        otherParams,
+        refreshCallback,
+        artDuplicateCheck
+    );
 }
 
 async function refreshArtLibrarySelect() {
-    const select = document.querySelector('#art-library-select');
-    if (!select) {
-        return;
-    }
-
-    select.innerHTML = '<option value="" selected="selected">None selected</option>';
-
-    try {
-        const response = await fetch('/api/assets/art-sources');
-        if (!response.ok) {
-            throw new Error('Failed to load art list (' + response.status + ')');
-        }
-
-        const items = await response.json();
-        items.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.url;
-            option.innerText = item.name;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Could not load art sources:', error);
-        const option = document.createElement('option');
-        option.value = '';
-        option.innerText = 'Failed to load saved art list';
-        select.appendChild(option);
-    }
+    await creatorAssetLibrary.refreshLibrarySelect('#art-library-select', 'art', {
+        noneText: 'None selected',
+        errorText: 'Failed to load saved art list'
+    });
 }
 
 function selectArtLibrarySource(element) {
-    if (!element || !element.value) {
-        return;
-    }
-    uploadArt(element.value, document.querySelector('#art-update-autofit').checked ? 'autoFit' : '');
+    creatorAssetLibrary.selectLibrarySource(element, (url) => {
+        uploadArt(url, document.querySelector('#art-update-autofit').checked ? 'autoFit' : '');
+    });
 }
 
 async function pasteArt() {
@@ -7856,14 +7769,7 @@ async function loadAssetLibrary() {
     status.textContent = 'Loading...';
 
     try {
-        const endpoint = _assetLibraryKind === 'art'
-            ? '/api/assets/art-sources'
-            : '/api/assets/sources/' + _assetLibraryKind;
-        const response = await fetch(endpoint);
-        if (!response.ok) {
-            throw new Error('HTTP ' + response.status);
-        }
-        _assetLibraryItems = await response.json();
+        _assetLibraryItems = await creatorAssetLibrary.fetchSources(_assetLibraryKind);
     } catch (err) {
         console.error('Asset library load failed:', err);
         status.textContent = 'Failed to load files.';
@@ -7984,12 +7890,8 @@ async function assetLibraryDeleteSelected() {
     let failed = 0;
     for (const url of urls) {
         try {
-            const response = await fetch('/api/assets/' + _assetLibraryKind, {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({url})
-            });
-            if (response.ok || response.status === 404) {
+            const isDeleted = await creatorAssetLibrary.deleteByKind(_assetLibraryKind, url);
+            if (isDeleted) {
                 deleted++;
             } else {
                 failed++;
@@ -8026,19 +7928,13 @@ async function assetLibraryUpload(filesRaw) {
 
     for (const file of files) {
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('nameHint', file.name);
-            const response = await fetch('/api/assets/upload/' + _assetLibraryKind, {
-                method: 'POST',
-                body: formData
-            });
-            if (response.ok) {
+            const result = await creatorAssetLibrary.uploadRawToKind(_assetLibraryKind, file, isDuplicate);
+            if (result.status === 'ok') {
                 uploaded++;
-            } else if (isDuplicate && response.status === 409) {
+            } else if (result.status === 'duplicate') {
                 dupes++;
             } else {
-                throw new Error('HTTP ' + response.status);
+                throw new Error('HTTP ' + result.code);
             }
         } catch (err) {
             console.error('Upload failed:', err);

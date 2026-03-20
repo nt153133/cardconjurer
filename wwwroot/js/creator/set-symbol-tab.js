@@ -17,40 +17,16 @@ async function uploadSetSymbolFilesToServer(filesRaw, otherParams = 'resetSetSym
 }
 
 async function refreshSetSymbolLibrarySelect() {
-    const select = document.querySelector('#set-symbol-library-select');
-    if (!select) {
-        return;
-    }
-
-    select.innerHTML = '<option value="" selected="selected">None selected</option>';
-
-    try {
-        const response = await fetch('/api/assets/sources/set-symbols');
-        if (!response.ok) {
-            throw new Error('Failed to load set symbol list (' + response.status + ')');
-        }
-
-        const items = await response.json();
-        items.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.url;
-            option.innerText = item.name;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Could not load uploaded set symbols:', error);
-        const option = document.createElement('option');
-        option.value = '';
-        option.innerText = 'Failed to load uploaded set symbols';
-        select.appendChild(option);
-    }
+    await creatorAssetLibrary.refreshLibrarySelect('#set-symbol-library-select', 'set-symbols', {
+        noneText: 'None selected',
+        errorText: 'Failed to load uploaded set symbols'
+    });
 }
 
 function selectSetSymbolLibrarySource(element) {
-    if (!element || !element.value) {
-        return;
-    }
-    uploadSetSymbol(element.value, 'resetSetSymbol');
+    creatorAssetLibrary.selectLibrarySource(element, (url) => {
+        uploadSetSymbol(url, 'resetSetSymbol');
+    });
 }
 
 function setSymbolEdited() {

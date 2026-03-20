@@ -17,40 +17,16 @@ async function uploadWatermarkFilesToServer(filesRaw, otherParams = 'resetWaterm
 }
 
 async function refreshWatermarkLibrarySelect() {
-    const select = document.querySelector('#watermark-library-select');
-    if (!select) {
-        return;
-    }
-
-    select.innerHTML = '<option value="" selected="selected">None selected</option>';
-
-    try {
-        const response = await fetch('/api/assets/sources/watermarks');
-        if (!response.ok) {
-            throw new Error('Failed to load watermark list (' + response.status + ')');
-        }
-
-        const items = await response.json();
-        items.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.url;
-            option.innerText = item.name;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Could not load uploaded watermarks:', error);
-        const option = document.createElement('option');
-        option.value = '';
-        option.innerText = 'Failed to load uploaded watermarks';
-        select.appendChild(option);
-    }
+    await creatorAssetLibrary.refreshLibrarySelect('#watermark-library-select', 'watermarks', {
+        noneText: 'None selected',
+        errorText: 'Failed to load uploaded watermarks'
+    });
 }
 
 function selectWatermarkLibrarySource(element) {
-    if (!element || !element.value) {
-        return;
-    }
-    uploadWatermark(element.value, 'resetWatermark');
+    creatorAssetLibrary.selectLibrarySource(element, (url) => {
+        uploadWatermark(url, 'resetWatermark');
+    });
 }
 
 function watermarkLeftColor(c) {
