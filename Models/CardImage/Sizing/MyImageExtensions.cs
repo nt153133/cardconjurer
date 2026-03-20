@@ -575,7 +575,7 @@ public static class MyImageExtensions
 
         var pngMetadata = image.Metadata.GetPngMetadata();
         foreach (var kvp in metadata)
-            pngMetadata.TextData.Add(new PngTextData(kvp.Key, kvp.Value, null, null));
+            pngMetadata.TextData.Add(new PngTextData(kvp.Key, kvp.Value, string.Empty, string.Empty));
     }
 
     /// <summary>

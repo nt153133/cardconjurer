@@ -8,6 +8,9 @@ All notable product-facing changes should be added here.
 - Import/Save: added `Download All Images (Print Bleed)` button that bulk-renders all saved cards through the server renderer with `isPrintImage: true` and saves them as a ZIP.
 - Validation workflow in Creator: added a `Validation` tab and local/server validation result sections wired to existing validation logic.
 - Validation bulk-fix actions: added buttons to update invalid local cards or all local saved cards to the currently selected size profile.
+
+### Changed
+- Frame tab UI and autoFrame logic extracted into modular files: `frameTab.js` (frame picker UI), `autoFrameLogic.js` (frame type selection), `autoFrameVariants.js` (frame-specific variants), `autoFrameHelpers.js` (frame layer builders) for improved maintainability.
 - Creator preview info strip: added an under-canvas box showing current size, loaded saved name, and art URL, plus a `Create New` action button.
 - Card size profile controls in Frame: restored profile selector, width/height inputs, apply/reset actions, and load override toggle.
 - Print download option: added `Download print version (includes bleed)` toggle and wired it to server render payload.
@@ -24,6 +27,10 @@ All notable product-facing changes should be added here.
 ### Changed
 - Creator script structure: started hybrid split by moving core draw/guideline/profile-overlay/rounded-corner rendering functions into `wwwroot/js/creator/rendering.js` while keeping current inline handlers via global bridge.
 - Creator script structure: split local/server saved-card management into `wwwroot/js/creator/card-storage.js` (`CreatorCardStorageService`) and converted `creator-23.js` storage functions to compatibility delegates.
+- Creator script structure: split validation/profile-match logic into `wwwroot/js/creator/validation-service.js` (`CreatorValidationService`) and converted `creator-23.js` validation functions to compatibility delegates.
+- Creator script structure: moved Set Symbol tab behavior and `drawSetSymbol(...)` into `wwwroot/js/creator/set-symbol-tab.js` and kept existing tab handlers unchanged.
+- Creator script structure: moved Watermark tab behavior (upload/select/edit/reset and set-code SVG watermark import) into `wwwroot/js/creator/watermark-tab.js`.
+- Creator script structure: moved Collector tab behavior (bottom info style/rendering, serial controls, artist sync, and collector defaults/toggles) into `wwwroot/js/creator/collector-tab.js`.
 - Import/Save download and upload controls regrouped into paired action cards: image downloads (both normal and print-bleed) on one side, cards-file download and upload on the other.
 - Frame options layout: grouped `Rounded Corners`, `Guidelines`, and `Transparencies` on one line and added `Show Cut/Safe Overlay` toggle.
 - Validation review output now renders as spaced flowing cards with structured details instead of dense unseparated text.
@@ -36,3 +43,4 @@ All notable product-facing changes should be added here.
 - Text editing no longer throws on missing textbox font sizes, and autoframe no longer reloads frame packs on each keystroke when key text fields are absent.
 - Creator startup stability: guarded optional DOM lookups (`#autoFrame`, `#autoframe-always-nyx`, `#art-update-autofit`) to prevent null-reference crashes.
 - Restored grouped Import/Save local-vs-server action card markup and frame helper grid class after partial revert.
+- Frame tab behavior: restored frame preview rendering, frame-list labels, drag/reorder, and frame settings interactions by avoiding conflicting `addFrame(...)` overrides.

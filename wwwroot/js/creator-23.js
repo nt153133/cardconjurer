@@ -1,5 +1,5 @@
 //URL Params
-// noinspection EqualityComparisonWithCoercionJS
+// noinspection EqualityComparisonWithCoercionJS,ES6ConvertVarToLetConst,JSCheckFunctionSignatures,JSUnresolvedReference
 
 var params = new URLSearchParams(window.location.search);
 const debugging = true;
@@ -409,87 +409,7 @@ async function resetCardIrregularities(options = {}) {
     }
 }
 
-async function setBottomInfoStyle() {
-    if (document.querySelector('#enableNewCollectorStyle').checked) {
-        await loadBottomInfo({
-            midLeft: {
-                text: '{elemidinfo-set} \u2022 {elemidinfo-language}  {savex}{fontbelerenbsc}{fontsize' + scaleHeight(0.001) + '}{upinline' + scaleHeight(0.0005) + '}\uFFEE{savex2}{elemidinfo-artist}',
-                x: 0.0647,
-                y: 0.9548,
-                width: 0.8707,
-                height: 0.0171,
-                oneLine: true,
-                font: 'gothammedium',
-                size: 0.0171,
-                color: card.bottomInfoColor,
-                outlineWidth: 0.003
-            },
-            topLeft: {
-                text: '{elemidinfo-rarity} {kerning3}{elemidinfo-number}{kerning0}',
-                x: 0.0647,
-                y: 0.9377,
-                width: 0.8707,
-                height: 0.0171,
-                oneLine: true,
-                font: 'gothammedium',
-                size: 0.0171,
-                color: card.bottomInfoColor,
-                outlineWidth: 0.003
-            },
-            note: {text: '{loadx}{elemidinfo-note}', x: 0.0647, y: 0.9377, width: 0.8707, height: 0.0171, oneLine: true, font: 'gothammedium', size: 0.0171, color: card.bottomInfoColor, outlineWidth: 0.003},
-            bottomLeft: {text: 'NOT FOR SALE', x: 0.0647, y: 0.9719, width: 0.8707, height: 0.0143, oneLine: true, font: 'gothammedium', size: 0.0143, color: card.bottomInfoColor, outlineWidth: 0.003},
-            wizards: {
-                name: 'wizards',
-                text: '{ptshift0,0.0172}\u2122 & \u00a9 {elemidinfo-year} Wizards of the Coast',
-                x: 0.0647,
-                y: 0.9377,
-                width: 0.8707,
-                height: 0.0167,
-                oneLine: true,
-                font: 'mplantin',
-                size: 0.0162,
-                color: card.bottomInfoColor,
-                align: 'right',
-                outlineWidth: 0.003
-            },
-            bottomRight: {text: '{ptshift0,0.0172}CardConjurer.com', x: 0.0647, y: 0.9548, width: 0.8707, height: 0.0143, oneLine: true, font: 'mplantin', size: 0.0143, color: card.bottomInfoColor, align: 'right', outlineWidth: 0.003}
-        });
-    } else {
-        await loadBottomInfo({
-            midLeft: {
-                text: '{elemidinfo-set} \u2022 {elemidinfo-language}  {savex}{fontbelerenbsc}{fontsize' + scaleHeight(0.001) + '}{upinline' + scaleHeight(0.0005) + '}\uFFEE{savex2}{elemidinfo-artist}',
-                x: 0.0647,
-                y: 0.9548,
-                width: 0.8707,
-                height: 0.0171,
-                oneLine: true,
-                font: 'gothammedium',
-                size: 0.0171,
-                color: card.bottomInfoColor,
-                outlineWidth: 0.003
-            },
-            topLeft: {text: '{elemidinfo-number}', x: 0.0647, y: 0.9377, width: 0.8707, height: 0.0171, oneLine: true, font: 'gothammedium', size: 0.0171, color: card.bottomInfoColor, outlineWidth: 0.003},
-            note: {text: '{loadx2}{elemidinfo-note}', x: 0.0647, y: 0.9377, width: 0.8707, height: 0.0171, oneLine: true, font: 'gothammedium', size: 0.0171, color: card.bottomInfoColor, outlineWidth: 0.003},
-            rarity: {text: '{loadx}{elemidinfo-rarity}', x: 0.0647, y: 0.9377, width: 0.8707, height: 0.0171, oneLine: true, font: 'gothammedium', size: 0.0171, color: card.bottomInfoColor, outlineWidth: 0.003},
-            bottomLeft: {text: 'NOT FOR SALE', x: 0.0647, y: 0.9719, width: 0.8707, height: 0.0143, oneLine: true, font: 'gothammedium', size: 0.0143, color: card.bottomInfoColor, outlineWidth: 0.003},
-            wizards: {
-                name: 'wizards',
-                text: '{ptshift0,0.0172}\u2122 & \u00a9 {elemidinfo-year} Wizards of the Coast',
-                x: 0.0647,
-                y: 0.9377,
-                width: 0.8707,
-                height: 0.0167,
-                oneLine: true,
-                font: 'mplantin',
-                size: 0.0162,
-                color: card.bottomInfoColor,
-                align: 'right',
-                outlineWidth: 0.003
-            },
-            bottomRight: {text: '{ptshift0,0.0172}CardConjurer.com', x: 0.0647, y: 0.9548, width: 0.8707, height: 0.0143, oneLine: true, font: 'mplantin', size: 0.0143, color: card.bottomInfoColor, align: 'right', outlineWidth: 0.003}
-        });
-    }
-}
+// Collector tab logic moved to /js/creator/collector-tab.js.
 
 //Canvas management
 function sizeCanvas(name, width = Math.round(card.width * (1 + 2 * card.marginX)), height = Math.round(card.height * (1 + 2 * card.marginY))) {
@@ -2261,7 +2181,7 @@ async function autoSeventhEditionFrame(colors, mana_cost, type_line, power) {
     card.frames.reverse();
 }
 
-function makeM15FrameByLetter(letter, mask = false, maskToRightHalf = false, style = 'regular') {
+function makeM15FrameByLetter(letter, mask = "", maskToRightHalf = false, style = 'regular') {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -2399,7 +2319,7 @@ function makeM15FrameByLetter(letter, mask = false, maskToRightHalf = false, sty
     return frame;
 }
 
-function makeM15NewFrameByLetter(letter, mask = false, maskToRightHalf = false, style = 'regular') {
+function makeM15NewFrameByLetter(letter, mask = "", maskToRightHalf = false, style = 'regular') {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -2560,7 +2480,7 @@ function makeM15NewFrameByLetter(letter, mask = false, maskToRightHalf = false, 
     return frame;
 }
 
-function makeM15EighthFrameByLetter(letter, mask = false, maskToRightHalf = false, style = 'regular') {
+function makeM15EighthFrameByLetter(letter, mask = "", maskToRightHalf = false, style = 'regular') {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -2696,7 +2616,7 @@ function makeM15EighthFrameByLetter(letter, mask = false, maskToRightHalf = fals
     return frame;
 }
 
-function makeM15EighthUBFrameByLetter(letter, mask = false, maskToRightHalf = false, style = false) {
+function makeM15EighthUBFrameByLetter(letter, mask = "", maskToRightHalf = false, style = false) {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -2839,7 +2759,7 @@ function makeM15EighthUBFrameByLetter(letter, mask = false, maskToRightHalf = fa
     return frame;
 }
 
-function makeBorderlessFrameByLetter(letter, mask = false, maskToRightHalf = false, style, universesBeyond = false) {
+function makeBorderlessFrameByLetter(letter, mask = "", maskToRightHalf = false, style, universesBeyond = false) {
     letter = letter.toUpperCase();
 
     var isVehicle = letter == 'V';
@@ -3000,7 +2920,7 @@ function makeBorderlessFrameByLetter(letter, mask = false, maskToRightHalf = fal
     return frame;
 }
 
-function make8thEditionFrameByLetter(letter, mask = false, maskToRightHalf = false, style = 'regular') {
+function make8thEditionFrameByLetter(letter, mask = "", maskToRightHalf = false, style = 'regular') {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -3075,7 +2995,7 @@ function make8thEditionFrameByLetter(letter, mask = false, maskToRightHalf = fal
     return frame;
 }
 
-function makeExtendedArtFrameByLetter(letter, mask = false, maskToRightHalf = false, style = 'regular', short = false) {
+function makeExtendedArtFrameByLetter(letter, mask = "", maskToRightHalf = false, style = 'regular', short = false) {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -3270,7 +3190,7 @@ function makeExtendedArtFrameByLetter(letter, mask = false, maskToRightHalf = fa
     return frame;
 }
 
-function makeUBFrameByLetter(letter, mask = false, maskToRightHalf = false, style = false) {
+function makeUBFrameByLetter(letter, mask = "", maskToRightHalf = false, style = false) {
     letter = letter.toUpperCase();
 
     if (letter == 'C') {
@@ -3428,7 +3348,7 @@ function makeUBFrameByLetter(letter, mask = false, maskToRightHalf = false, styl
     return frame;
 }
 
-function makeCircuitFrameByLetter(letter, mask = false, maskToRightHalf = false) {
+function makeCircuitFrameByLetter(letter, mask = "", maskToRightHalf = false) {
     letter = letter.toUpperCase();
 
     if (letter == 'C') {
@@ -3535,7 +3455,7 @@ function makeCircuitFrameByLetter(letter, mask = false, maskToRightHalf = false)
     return frame;
 }
 
-function makeEtchedFrameByLetter(letter, mask = false, maskToRightHalf = false, style = 'regular') {
+function makeEtchedFrameByLetter(letter, mask = "", maskToRightHalf = false, style = 'regular') {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -3655,7 +3575,7 @@ function makeEtchedFrameByLetter(letter, mask = false, maskToRightHalf = false, 
     return frame;
 }
 
-function makePhyrexianFrameByLetter(letter, mask = false, maskToRightHalf = false) {
+function makePhyrexianFrameByLetter(letter, mask = "", maskToRightHalf = false) {
     if (letter == 'C' || letter == 'V') {
         letter = 'L';
     }
@@ -3772,7 +3692,7 @@ function makePhyrexianFrameByLetter(letter, mask = false, maskToRightHalf = fals
     return frame;
 }
 
-function makeSeventhEditionFrameByLetter(letter, mask = false, maskToRightHalf = false) {
+function makeSeventhEditionFrameByLetter(letter, mask = "", maskToRightHalf = false) {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -5743,372 +5663,13 @@ function artStopDrag(e) {
 }
 
 //SET SYMBOL TAB
-function uploadSetSymbol(imageSource, otherParams) {
-    ImageLoadTracker.track(imageSource);
-    setSymbol.src = imageSource;
-    if (otherParams && otherParams == 'resetSetSymbol') {
-        setSymbol.onload = function () {
-            resetSetSymbol();
-            setSymbol.onload = setSymbolEdited;
-        };
-    }
-}
-
-async function uploadSetSymbolFilesToServer(filesRaw, otherParams = 'resetSetSymbol') {
-    await uploadFilesToServerByKind(filesRaw, 'set-symbols', uploadSetSymbol, otherParams, refreshSetSymbolLibrarySelect);
-}
-
-async function refreshSetSymbolLibrarySelect() {
-    const select = document.querySelector('#set-symbol-library-select');
-    if (!select) {
-        return;
-    }
-
-    select.innerHTML = '<option value="" selected="selected">None selected</option>';
-
-    try {
-        const response = await fetch('/api/assets/sources/set-symbols');
-        if (!response.ok) {
-            throw new Error('Failed to load set symbol list (' + response.status + ')');
-        }
-
-        const items = await response.json();
-        items.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.url;
-            option.innerText = item.name;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Could not load uploaded set symbols:', error);
-        const option = document.createElement('option');
-        option.value = '';
-        option.innerText = 'Failed to load uploaded set symbols';
-        select.appendChild(option);
-    }
-}
-
-function selectSetSymbolLibrarySource(element) {
-    if (!element || !element.value) {
-        return;
-    }
-    uploadSetSymbol(element.value, 'resetSetSymbol');
-}
-
-function setSymbolEdited() {
-    card.setSymbolSource = setSymbol.src;
-    if (document.querySelector('#lockSetSymbolURL').checked) {
-        localStorage.setItem('lockSetSymbolURL', card.setSymbolSource);
-    }
-    localStorage.setItem('set-symbol-source', document.querySelector('#set-symbol-source').value);
-    card.setSymbolX = document.querySelector('#setSymbol-x').value / card.width;
-    card.setSymbolY = document.querySelector('#setSymbol-y').value / card.height;
-    card.setSymbolZoom = document.querySelector('#setSymbol-zoom').value / 100;
-    drawCard();
-}
-
-function resetSetSymbol() {
-    if (card.setSymbolBounds == undefined) {
-        return;
-    }
-    document.querySelector('#setSymbol-x').value = Math.round(scaleX(card.setSymbolBounds.x));
-    document.querySelector('#setSymbol-y').value = Math.round(scaleY(card.setSymbolBounds.y));
-    var setSymbolZoom;
-    if (setSymbol.width / setSymbol.height > scaleWidth(card.setSymbolBounds.width) / scaleHeight(card.setSymbolBounds.height)) {
-        setSymbolZoom = (scaleWidth(card.setSymbolBounds.width) / setSymbol.width * 100).toFixed(1);
-    } else {
-        setSymbolZoom = (scaleHeight(card.setSymbolBounds.height) / setSymbol.height * 100).toFixed(1);
-    }
-    document.querySelector('#setSymbol-zoom').value = setSymbolZoom;
-    if (card.setSymbolBounds.horizontal == 'center') {
-        document.querySelector('#setSymbol-x').value = Math.round(scaleX(card.setSymbolBounds.x) - (setSymbol.width * setSymbolZoom / 100) / 2 - scaleWidth(card.marginX));
-    } else if (card.setSymbolBounds.horizontal == 'right') {
-        document.querySelector('#setSymbol-x').value = Math.round(scaleX(card.setSymbolBounds.x) - (setSymbol.width * setSymbolZoom / 100) - scaleWidth(card.marginX));
-    }
-    if (card.setSymbolBounds.vertical == 'center') {
-        document.querySelector('#setSymbol-y').value = Math.round(scaleY(card.setSymbolBounds.y) - (setSymbol.height * setSymbolZoom / 100) / 2 - scaleHeight(card.marginY));
-    } else if (card.setSymbolBounds.vertical == 'bottom') {
-        document.querySelector('#setSymbol-y').value = Math.round(scaleY(card.setSymbolBounds.y) - (setSymbol.height * setSymbolZoom / 100) - scaleHeight(card.marginY));
-    }
-    setSymbolEdited();
-}
-
-function fetchSetSymbol() {
-    var setCode = document.querySelector('#set-symbol-code').value.toLowerCase() || 'cmd';
-    if (document.querySelector('#lockSetSymbolCode').checked) {
-        localStorage.setItem('lockSetSymbolCode', setCode);
-    }
-    var setRarity = document.querySelector('#set-symbol-rarity').value.toLowerCase().replace('uncommon', 'u').replace('common', 'c').replace('rare', 'r').replace('mythic', 'm') || 'c';
-    if (['a22', 'a23', 'j22', 'hlw'].includes(setCode.toLowerCase())) {
-        uploadSetSymbol(fixUri(`/img/setSymbols/custom/${setCode.toLowerCase()}-${setRarity}.png`), 'resetSetSymbol');
-    } else if (['cc', 'logan', 'joe'].includes(setCode.toLowerCase())) {
-        uploadSetSymbol(fixUri(`/img/setSymbols/custom/${setCode.toLowerCase()}-${setRarity}.svg`), 'resetSetSymbol');
-    } else if (document.querySelector("#set-symbol-source").value == 'gatherer') {
-        if (setSymbolAliases.has(setCode.toLowerCase())) setCode = setSymbolAliases.get(setCode.toLowerCase());
-        uploadSetSymbol('http://gatherer.wizards.com/Handlers/Image.ashx?type=symbol&set=' + setCode + '&size=large&rarity=' + setRarity, 'resetSetSymbol');
-    } else if (document.querySelector("#set-symbol-source").value == 'hexproof') {
-        if (setSymbolAliases.has(setCode.toLowerCase())) setCode = setSymbolAliases.get(setCode.toLowerCase());
-        var hexproofUrl = 'https://api.hexproof.io/symbols/set/' + setCode + '/' + setRarity;
-        // Use CORS proxy for hexproof.io
-        if (params.get('noproxy') == null) {
-            hexproofUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(hexproofUrl);
-        }
-        uploadSetSymbol(hexproofUrl, 'resetSetSymbol');
-    } else {
-        var extension = 'svg';
-        if (['xxxx'].includes(setCode.toLowerCase())) {
-            extension = 'png';
-        }
-        if (setSymbolAliases.has(setCode.toLowerCase())) setCode = setSymbolAliases.get(setCode.toLowerCase());
-        uploadSetSymbol(fixUri(`/img/setSymbols/official/${setCode.toLowerCase()}-${setRarity}.` + extension), 'resetSetSymbol');
-    }
-}
-
-function lockSetSymbolCode() {
-    var savedValue = '';
-    if (document.querySelector('#lockSetSymbolCode').checked) {
-        savedValue = document.querySelector('#set-symbol-code').value;
-    }
-    localStorage.setItem('lockSetSymbolCode', savedValue);
-}
-
-function lockSetSymbolURL() {
-    var savedValue = '';
-    if (document.querySelector('#lockSetSymbolURL').checked) {
-        savedValue = card.setSymbolSource;
-    }
-    localStorage.setItem('lockSetSymbolURL', savedValue);
-}
+// Set Symbol tab logic moved to /js/creator/set-symbol-tab.js.
 
 //WATERMARK TAB
-function uploadWatermark(imageSource, otherParams) {
-    ImageLoadTracker.track(imageSource);
-    watermark.src = imageSource;
-    if (otherParams && otherParams == 'resetWatermark') {
-        watermark.onload = function () {
-            resetWatermark();
-            watermark.onload = watermarkEdited;
-        };
-    }
-}
+// Watermark tab logic moved to /js/creator/watermark-tab.js.
 
-async function uploadWatermarkFilesToServer(filesRaw, otherParams = 'resetWatermark') {
-    await uploadFilesToServerByKind(filesRaw, 'watermarks', uploadWatermark, otherParams, refreshWatermarkLibrarySelect);
-}
-
-async function refreshWatermarkLibrarySelect() {
-    const select = document.querySelector('#watermark-library-select');
-    if (!select) {
-        return;
-    }
-
-    select.innerHTML = '<option value="" selected="selected">None selected</option>';
-
-    try {
-        const response = await fetch('/api/assets/sources/watermarks');
-        if (!response.ok) {
-            throw new Error('Failed to load watermark list (' + response.status + ')');
-        }
-
-        const items = await response.json();
-        items.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.url;
-            option.innerText = item.name;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Could not load uploaded watermarks:', error);
-        const option = document.createElement('option');
-        option.value = '';
-        option.innerText = 'Failed to load uploaded watermarks';
-        select.appendChild(option);
-    }
-}
-
-function selectWatermarkLibrarySource(element) {
-    if (!element || !element.value) {
-        return;
-    }
-    uploadWatermark(element.value, 'resetWatermark');
-}
-
-function watermarkLeftColor(c) {
-    card.watermarkLeft = c;
-    watermarkEdited();
-}
-
-function watermarkRightColor(c) {
-    card.watermarkRight = c;
-    watermarkEdited();
-}
-
-function watermarkEdited() {
-    card.watermarkSource = watermark.src;
-    card.watermarkX = document.querySelector('#watermark-x').value / card.width;
-    card.watermarkY = document.querySelector('#watermark-y').value / card.height;
-    card.watermarkZoom = document.querySelector('#watermark-zoom').value / 100;
-    if (card.watermarkLeft == "none" && document.querySelector('#watermark-left').value != "none") {
-        card.watermarkLeft = document.querySelector('#watermark-left').value;
-    }
-    // card.watermarkLeft = document.querySelector('#watermark-left').value;
-    // card.watermarkRight =  document.querySelector('#watermark-right').value;
-    card.watermarkOpacity = document.querySelector('#watermark-opacity').value / 100;
-    watermarkContext.globalCompositeOperation = 'source-over';
-    watermarkContext.globalAlpha = 1;
-    watermarkContext.clearRect(0, 0, watermarkCanvas.width, watermarkCanvas.height);
-    if (card.watermarkLeft != 'none' && !card.watermarkSource.includes('/blank.png') && card.watermarkZoom > 0) {
-        if (card.watermarkRight != 'none') {
-            watermarkContext.drawImage(right, scaleX(0), scaleY(0), scaleWidth(1), scaleHeight(1));
-            watermarkContext.globalCompositeOperation = 'source-in';
-            if (card.watermarkRight == 'default') {
-                watermarkContext.drawImage(watermark, scaleX(card.watermarkX), scaleY(card.watermarkY), watermark.width * card.watermarkZoom, watermark.height * card.watermarkZoom);
-            } else {
-                watermarkContext.fillStyle = card.watermarkRight;
-                watermarkContext.fillRect(0, 0, watermarkCanvas.width, watermarkCanvas.height);
-            }
-            watermarkContext.globalCompositeOperation = 'destination-over';
-        }
-        if (card.watermarkLeft == 'default') {
-            watermarkContext.drawImage(watermark, scaleX(card.watermarkX), scaleY(card.watermarkY), watermark.width * card.watermarkZoom, watermark.height * card.watermarkZoom);
-        } else {
-            watermarkContext.fillStyle = card.watermarkLeft;
-            watermarkContext.fillRect(0, 0, watermarkCanvas.width, watermarkCanvas.height);
-        }
-        watermarkContext.globalCompositeOperation = 'destination-in';
-        watermarkContext.drawImage(watermark, scaleX(card.watermarkX), scaleY(card.watermarkY), watermark.width * card.watermarkZoom, watermark.height * card.watermarkZoom);
-        watermarkContext.globalAlpha = card.watermarkOpacity;
-        watermarkContext.fillRect(0, 0, watermarkCanvas.width, watermarkCanvas.height);
-    }
-    drawCard();
-}
-
-function resetWatermark() {
-    var watermarkZoom;
-    if (watermark.width / watermark.height > scaleWidth(card.watermarkBounds.width) / scaleHeight(card.watermarkBounds.height)) {
-        watermarkZoom = (scaleWidth(card.watermarkBounds.width) / watermark.width * 100).toFixed(1);
-    } else {
-        watermarkZoom = (scaleHeight(card.watermarkBounds.height) / watermark.height * 100).toFixed(1);
-    }
-    document.querySelector('#watermark-zoom').value = watermarkZoom;
-    document.querySelector('#watermark-x').value = Math.round(scaleX(card.watermarkBounds.x) - watermark.width * watermarkZoom / 200 - scaleWidth(card.marginX));
-    document.querySelector('#watermark-y').value = Math.round(scaleY(card.watermarkBounds.y) - watermark.height * watermarkZoom / 200 - scaleHeight(card.marginY));
-    watermarkEdited();
-}
-
-//svg cropper
-function getSetSymbolWatermark(url, targetImage = watermark) {
-    if (!url.includes('/')) {
-        url = 'https://cdn.jsdelivr.net/npm/keyrune/svg/' + url + '.svg';
-    }
-    xhttp = new XMLHttpRequest();
-    xhttp.open('GET', url, true);
-    xhttp.overrideMimeType('image/svg+xml');
-    xhttp.onload = function (event) {
-        if (this.readyState == 4 && this.status == 200) {
-            var svg = document.body.appendChild(xhttp.responseXML.documentElement);
-            var box = svg.getBBox(svg);
-            svg.setAttribute('viewBox', [box.x, box.y, box.width, box.height].join(' '));
-            svg.setAttribute('width', box.width);
-            svg.setAttribute('height', box.height);
-            uploadWatermark('data:image/svg+xml,' + encodeURIComponent(svg.outerHTML), 'resetWatermark');
-            svg.remove();
-        } else if (this.status == 404) {
-            throw new Error('Improper Set Code');
-        }
-    }
-    xhttp.send();
-}
-
-//Bottom Info Tab
-async function loadBottomInfo(textObjects = []) {
-    await bottomInfoContext.clearRect(0, 0, bottomInfoCanvas.width, bottomInfoCanvas.height);
-    card.bottomInfo = null;
-    card.bottomInfo = textObjects;
-    await bottomInfoEdited();
-    bottomInfoEdited();
-}
-
-async function bottomInfoEdited() {
-    await bottomInfoContext.clearRect(0, 0, bottomInfoCanvas.width, bottomInfoCanvas.height);
-    card.infoNumber = document.querySelector('#info-number').value;
-    card.infoRarity = document.querySelector('#info-rarity').value;
-    card.infoSet = document.querySelector('#info-set').value;
-    card.infoLanguage = document.querySelector('#info-language').value;
-    card.infoArtist = document.querySelector('#info-artist').value;
-    card.infoYear = document.querySelector('#info-year').value;
-    card.infoNote = document.querySelector('#info-note').value;
-
-    if (document.querySelector('#enableCollectorInfo').checked) {
-        for (var textObject of Object.entries(card.bottomInfo)) {
-            if (["NOT FOR SALE", "Wizards of the Coast", "CardConjurer.com", "cardconjurer.com"].some(v => textObject[1].text.includes(v))) {
-                continue;
-            } else {
-                textObject[1].name = textObject[0];
-                await writeText(textObject[1], bottomInfoContext);
-            }
-
-        }
-    }
-
-    drawCard();
-}
-
-async function serialInfoEdited() {
-    card.serialNumber = document.querySelector('#serial-number').value;
-    card.serialTotal = document.querySelector('#serial-total').value;
-    card.serialX = document.querySelector('#serial-x').value;
-    card.serialY = document.querySelector('#serial-y').value;
-    card.serialScale = document.querySelector('#serial-scale').value;
-
-    drawCard();
-}
-
-async function resetSerial() {
-    card.serialX = scaleX(SERIAL_DEFAULT_X / SERIAL_REFERENCE_WIDTH);
-    card.serialY = scaleY(SERIAL_DEFAULT_Y / SERIAL_REFERENCE_HEIGHT);
-    card.serialScale = 1.0;
-
-    document.querySelector('#serial-x').value = card.serialX;
-    document.querySelector('#serial-y').value = card.serialY;
-    document.querySelector('#serial-scale').value = card.serialScale;
-
-    drawCard();
-}
-
-function artistEdited(value) {
-    document.querySelector('#art-artist').value = value;
-    document.querySelector('#info-artist').value = value;
-    bottomInfoEdited();
-}
-
-function toggleStarDot() {
-    for (var key of Object.keys(card.bottomInfo)) {
-        var text = card.bottomInfo[key].text
-        if (text.includes('*')) {
-            card.bottomInfo[key].text = text.replace('*', ' \u2022 ');
-        } else {
-            card.bottomInfo[key].text = text.replace(' \u2022 ', '*');
-        }
-    }
-    defaultCollector.starDot = !defaultCollector.starDot;
-    bottomInfoEdited();
-}
-
-function enableNewCollectorInfoStyle() {
-    localStorage.setItem('enableNewCollectorStyle', document.querySelector('#enableNewCollectorStyle').checked);
-    setBottomInfoStyle();
-    bottomInfoEdited();
-}
-
-function enableCollectorInfo() {
-    localStorage.setItem('enableCollectorInfo', document.querySelector('#enableCollectorInfo').checked);
-    bottomInfoEdited();
-}
-
-function enableImportCollectorInfo() {
-    localStorage.setItem('enableImportCollectorInfo', document.querySelector('#enableImportCollectorInfo').checked);
-}
+//COLLECTOR TAB
+// Collector tab logic moved to /js/creator/collector-tab.js.
 
 function setAutoFrame() {
     var value = document.querySelector('#autoFrame').value;
@@ -6126,85 +5687,9 @@ function setAutofit() {
     localStorage.setItem('autoFit', document.querySelector('#art-update-autofit').checked);
 }
 
-function removeDefaultCollector() {
-    defaultCollector = {}; //{number: year, rarity:'P', setCode:'MTG', lang:'EN', starDot:false};
-    localStorage.removeItem('defaultCollector'); //localStorage.setItem('defaultCollector', JSON.stringify(defaultCollector));
-}
+// Collector defaults moved to /js/creator/collector-tab.js.
 
-function setDefaultCollector() {
-    starDot = defaultCollector.starDot;
-    defaultCollector = {
-        number: document.querySelector('#info-number').value,
-        rarity: document.querySelector('#info-rarity').value,
-        setCode: document.querySelector('#info-set').value,
-        lang: document.querySelector('#info-language').value,
-        note: document.querySelector('#info-note').value,
-        starDot: starDot
-    };
-    localStorage.setItem('defaultCollector', JSON.stringify(defaultCollector));
-}
-
-function drawSetSymbol(cardContext, setSymbol, bounds) {
-    if (!bounds) return;
-
-    const symbolWidth = setSymbol.width * card.setSymbolZoom;
-    const symbolHeight = setSymbol.height * card.setSymbolZoom;
-    const x = scaleX(card.setSymbolX);
-    const y = scaleY(card.setSymbolY);
-
-    if (bounds.outlineWidth && bounds.outlineWidth > 0) {
-        // Create temp canvas for outlined symbol
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-
-        // Scale the outline width the same way text outlines are scaled
-        const outlineWidth = scaleHeight(bounds.outlineWidth);
-        const margin = outlineWidth * 2;
-        tempCanvas.width = symbolWidth + margin;
-        tempCanvas.height = symbolHeight + margin;
-
-        // Setup stroke style (similar to text outline system)
-        tempCtx.strokeStyle = bounds.outlineColor || 'black';
-        tempCtx.lineWidth = outlineWidth;
-        tempCtx.lineJoin = bounds.lineJoin || 'round';
-        tempCtx.lineCap = bounds.lineCap || 'round';
-
-        // First pass: Draw outline by stroking the symbol multiple times in a circle pattern
-        const outlineSteps = Math.max(8, Math.ceil(outlineWidth * 2));
-        for (let i = 0; i < outlineSteps; i++) {
-            const angle = (i / outlineSteps) * Math.PI * 2;
-            const offsetX = Math.cos(angle) * (outlineWidth / 2);
-            const offsetY = Math.sin(angle) * (outlineWidth / 2);
-
-            tempCtx.globalCompositeOperation = 'source-over';
-            tempCtx.drawImage(setSymbol,
-                outlineWidth + offsetX,
-                outlineWidth + offsetY,
-                symbolWidth,
-                symbolHeight);
-
-            // Apply the outline color
-            tempCtx.globalCompositeOperation = 'source-in';
-            tempCtx.fillStyle = bounds.outlineColor || 'black';
-            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-            tempCtx.globalCompositeOperation = 'destination-over';
-        }
-
-        // Second pass: Draw the original symbol on top
-        tempCtx.globalCompositeOperation = 'source-over';
-        tempCtx.drawImage(setSymbol, outlineWidth, outlineWidth, symbolWidth, symbolHeight);
-
-        // Draw to main canvas
-        cardContext.drawImage(tempCanvas,
-            x - outlineWidth,
-            y - outlineWidth,
-            tempCanvas.width,
-            tempCanvas.height);
-    } else {
-        // Draw main symbol without outline (simple path)
-        cardContext.drawImage(setSymbol, x, y, symbolWidth, symbolHeight);
-    }
-}
+// drawSetSymbol moved to /js/creator/set-symbol-tab.js.
 
 //DRAWING THE CARD (putting it all together)
 // drawCard moved to /js/creator/rendering.js during hybrid split.
@@ -7644,8 +7129,8 @@ function loadAvailableCards(cardKeys = getLocalCardKeys()) {
     return window.creatorCardStorage.loadAvailableCards(cardKeys);
 }
 
-var CARD_SIZE_VALIDATION_TOLERANCE_PX = 2;
-var _lastLocalValidationEntries = [];
+var CARD_SIZE_VALIDATION_TOLERANCE_PX = window.creatorValidationService.CARD_SIZE_VALIDATION_TOLERANCE_PX;
+var _lastLocalValidationEntries = window.creatorValidationService._lastLocalValidationEntries;
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -7657,418 +7142,80 @@ function escapeHtml(value) {
 }
 
 async function ensureCardSizeProfilesAvailable() {
-    if (Object.keys(cardSizeProfilesByName).length > 0) {
-        return true;
-    }
-
-    await loadCardSizeProfiles();
-    return Object.keys(cardSizeProfilesByName).length > 0;
+    return await window.creatorValidationService.ensureCardSizeProfilesAvailable();
 }
 
 function getKnownCardSizeProfiles() {
-    return Object.values(cardSizeProfilesByName || {});
+    return window.creatorValidationService.getKnownCardSizeProfiles();
 }
 
 function approximatelyEqualPixels(left, right, tolerance = CARD_SIZE_VALIDATION_TOLERANCE_PX) {
-    return Math.abs(Number(left) - Number(right)) <= tolerance;
+    return window.creatorValidationService.approximatelyEqualPixels(left, right, tolerance);
 }
 
 function sizeMatchesProfile(size, width, height, tolerance = CARD_SIZE_VALIDATION_TOLERANCE_PX) {
-    return !!size
-        && approximatelyEqualPixels(size.width, width, tolerance)
-        && approximatelyEqualPixels(size.height, height, tolerance);
+    return window.creatorValidationService.sizeMatchesProfile(size, width, height, tolerance);
 }
 
 function getCardSizeMetrics(cardData) {
-    var cutWidth = Math.round(Number(cardData && cardData.width) || 0);
-    var cutHeight = Math.round(Number(cardData && cardData.height) || 0);
-    var marginX = Number(cardData && cardData.marginX) || 0;
-    var marginY = Number(cardData && cardData.marginY) || 0;
-    var bleedWidth = Math.round(cutWidth * (1 + 2 * marginX));
-    var bleedHeight = Math.round(cutHeight * (1 + 2 * marginY));
-
-    return {
-        cutWidth: cutWidth,
-        cutHeight: cutHeight,
-        marginX: marginX,
-        marginY: marginY,
-        bleedWidth: bleedWidth,
-        bleedHeight: bleedHeight,
-        hasMargins: marginX > 0 || marginY > 0
-    };
+    return window.creatorValidationService.getCardSizeMetrics(cardData);
 }
 
 function getProfileNames(profiles) {
-    return (profiles || []).map(function(profile) {
-        return profile.name;
-    });
+    return window.creatorValidationService.getProfileNames(profiles);
 }
 
 function inferCardSizeValidation(cardData) {
-    var metrics = getCardSizeMetrics(cardData);
-    var profiles = getKnownCardSizeProfiles();
-
-    if (metrics.cutWidth <= 0 || metrics.cutHeight <= 0) {
-        return {
-            invalid: true,
-            status: 'Missing dimensions',
-            metrics: metrics,
-            cutMatches: [],
-            bleedMatches: [],
-            exactMatches: [],
-            details: 'Saved card is missing a usable width or height.'
-        };
-    }
-
-    var cutMatches = profiles.filter(function(profile) {
-        return sizeMatchesProfile(profile.cut, metrics.cutWidth, metrics.cutHeight);
-    });
-    var bleedMatches = profiles.filter(function(profile) {
-        return sizeMatchesProfile(profile.bleed, metrics.bleedWidth, metrics.bleedHeight);
-    });
-    var exactMatches = cutMatches.filter(function(profile) {
-        return bleedMatches.some(function(bleedProfile) {
-            return bleedProfile.name === profile.name;
-        });
-    });
-
-    if (!metrics.hasMargins && cutMatches.length > 0) {
-        return {
-            invalid: false,
-            status: 'Matches cut size',
-            metrics: metrics,
-            cutMatches: cutMatches,
-            bleedMatches: bleedMatches,
-            exactMatches: cutMatches,
-            details: 'Card matches a known cut-size profile.'
-        };
-    }
-
-    if (metrics.hasMargins && exactMatches.length > 0) {
-        return {
-            invalid: false,
-            status: 'Matches cut + bleed',
-            metrics: metrics,
-            cutMatches: cutMatches,
-            bleedMatches: bleedMatches,
-            exactMatches: exactMatches,
-            details: 'Card matches a known profile including calculated bleed size.'
-        };
-    }
-
-    var status = 'No known profile';
-    var details = 'Card dimensions do not match any known cut or bleed size.';
-    if (cutMatches.length > 0 && bleedMatches.length === 0) {
-        status = 'Cut matches only';
-        details = 'The saved width/height match a known profile, but the calculated bleed size does not.';
-    } else if (cutMatches.length === 0 && bleedMatches.length > 0) {
-        status = 'Bleed matches only';
-        details = 'The calculated size with margin matches a known profile, but the saved width/height do not.';
-    } else if (cutMatches.length > 0 && bleedMatches.length > 0 && exactMatches.length === 0) {
-        status = 'Mixed profile match';
-        details = 'Cut and calculated bleed each match known profiles, but not the same one.';
-    }
-
-    return {
-        invalid: true,
-        status: status,
-        metrics: metrics,
-        cutMatches: cutMatches,
-        bleedMatches: bleedMatches,
-        exactMatches: exactMatches,
-        details: details
-    };
+    return window.creatorValidationService.inferCardSizeValidation(cardData);
 }
 
 function getLocalValidationEntries() {
-    var keys = getLocalCardKeys().slice().sort();
-    var entries = [];
-    keys.forEach(function(key) {
-        try {
-            var data = readLocalCardData(key);
-            if (!data) {
-                return;
-            }
-            entries.push({
-                key: key,
-                name: key,
-                data: data,
-                validation: inferCardSizeValidation(data)
-            });
-        } catch (error) {
-            entries.push({
-                key: key,
-                name: key,
-                data: null,
-                validation: {
-                    invalid: true,
-                    status: 'Unreadable card',
-                    metrics: {cutWidth: 0, cutHeight: 0, bleedWidth: 0, bleedHeight: 0, marginX: 0, marginY: 0},
-                    cutMatches: [],
-                    bleedMatches: [],
-                    exactMatches: [],
-                    details: 'Failed to read saved card JSON: ' + error
-                }
-            });
-        }
-    });
-    return entries;
+    return window.creatorValidationService.getLocalValidationEntries();
 }
 
 function normalizeMarginScale(marginScale) {
-    if (marginScale == null) {
-        return null;
-    }
-    if (typeof marginScale === 'number' && Number.isFinite(marginScale)) {
-        return {x: marginScale, y: marginScale};
-    }
-
-    var x = Number(marginScale.x);
-    var y = Number(marginScale.y);
-    var uniform = Number(marginScale.uniform);
-
-    if (!Number.isFinite(x) && Number.isFinite(uniform)) {
-        x = uniform;
-    }
-    if (!Number.isFinite(y) && Number.isFinite(uniform)) {
-        y = uniform;
-    }
-
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-        return null;
-    }
-
-    return {x: x, y: y};
+    return window.creatorValidationService.normalizeMarginScale(marginScale);
 }
 
 function applySelectedProfileSizeToSavedCard(cardData, profile, normalizedMarginScale) {
-    if (!cardData || !profile || !profile.cut) {
-        return cardData;
-    }
-
-    cardData.width = Number(profile.cut.width);
-    cardData.height = Number(profile.cut.height);
-
-    var shouldKeepMargins = !!cardData.margins || (Number(cardData.marginX) || 0) > 0 || (Number(cardData.marginY) || 0) > 0;
-    if (shouldKeepMargins && normalizedMarginScale) {
-        cardData.marginX = normalizedMarginScale.x;
-        cardData.marginY = normalizedMarginScale.y;
-        cardData.margins = true;
-    } else {
-        cardData.marginX = 0;
-        cardData.marginY = 0;
-        cardData.margins = false;
-    }
-
-    return cardData;
+    return window.creatorValidationService.applySelectedProfileSizeToSavedCard(cardData, profile, normalizedMarginScale);
 }
 
 async function updateLocalSavedCardsToSelectedProfile(includeOnlyInvalid) {
-    if (!(await ensureCardSizeProfilesAvailable())) {
-        notify('Validation cannot update saved cards until size profiles are available.', 5);
-        return;
-    }
-
-    var selectedProfile = getSelectedCardSizeProfile();
-    if (!selectedProfile || !selectedProfile.cut) {
-        notify('Select a card size profile on the Frame tab first.', 4);
-        return;
-    }
-
-    var normalizedMarginScale = normalizeMarginScale(getSelectedCardSizeMarginScale());
-    var entries = includeOnlyInvalid && _lastLocalValidationEntries.length
-        ? _lastLocalValidationEntries.slice()
-        : getLocalValidationEntries();
-    _lastLocalValidationEntries = entries;
-
-    var targetEntries = entries.filter(function(entry) {
-        if (!entry || !entry.key || !entry.data) {
-            return false;
-        }
-        return includeOnlyInvalid ? !!(entry.validation && entry.validation.invalid) : true;
-    });
-
-    if (!targetEntries.length) {
-        notify(includeOnlyInvalid ? 'No invalid local cards need review.' : 'No readable local cards were found to update.', 4);
-        await refreshLocalValidation();
-        return;
-    }
-
-    var updatedCount = 0;
-    var failedKeys = [];
-    targetEntries.forEach(function(entry) {
-        try {
-            var updatedData = applySelectedProfileSizeToSavedCard(JSON.parse(JSON.stringify(entry.data)), selectedProfile, normalizedMarginScale);
-            localStorage.setItem(entry.key, JSON.stringify(updatedData));
-            updatedCount++;
-        } catch (error) {
-            console.error('Failed to update local card to selected profile:', entry.key, error);
-            failedKeys.push(entry.key);
-        }
-    });
-
-    await refreshLocalValidation();
-
-    if (failedKeys.length) {
-        notify(
-            'Updated ' + updatedCount + ' local card(s), but failed to update: ' + failedKeys.join(', '),
-            5
-        );
-        return;
-    }
-
-    notify(
-        (includeOnlyInvalid ? 'Updated invalid local cards' : 'Updated all local cards')
-        + ' to ' + selectedProfile.name + ' (' + updatedCount + ' total).',
-        4
-    );
+    await window.creatorValidationService.updateLocalSavedCardsToSelectedProfile(includeOnlyInvalid);
+    _lastLocalValidationEntries = window.creatorValidationService._lastLocalValidationEntries;
 }
 
 async function setInvalidLocalCardsToSelectedProfile() {
-    await updateLocalSavedCardsToSelectedProfile(true);
+    await window.creatorValidationService.setInvalidLocalCardsToSelectedProfile();
+    _lastLocalValidationEntries = window.creatorValidationService._lastLocalValidationEntries;
 }
 
 async function setAllLocalCardsToSelectedProfile() {
-    await updateLocalSavedCardsToSelectedProfile(false);
+    await window.creatorValidationService.setAllLocalCardsToSelectedProfile();
+    _lastLocalValidationEntries = window.creatorValidationService._lastLocalValidationEntries;
 }
 
 function renderValidationResults(summarySelector, resultsSelector, sourceLabel, entries) {
-    var summaryEl = document.querySelector(summarySelector);
-    var resultsEl = document.querySelector(resultsSelector);
-    if (!summaryEl || !resultsEl) {
-        return;
-    }
-
-    var items = Array.isArray(entries) ? entries : [];
-    var invalidEntries = items.filter(function(entry) {
-        return entry && entry.validation && entry.validation.invalid;
-    });
-    var validCount = items.length - invalidEntries.length;
-
-    summaryEl.textContent = items.length === 0
-        ? 'No ' + sourceLabel.toLowerCase() + ' cards found.'
-        : items.length + ' checked · ' + validCount + ' matched known profiles · ' + invalidEntries.length + ' need review';
-
-    resultsEl.innerHTML = '';
-    if (items.length === 0) {
-        resultsEl.innerHTML = '<p class="validation-result-empty">No ' + escapeHtml(sourceLabel.toLowerCase()) + ' cards found.</p>';
-        return;
-    }
-    if (invalidEntries.length === 0) {
-        resultsEl.innerHTML = '<p class="validation-result-empty">All ' + escapeHtml(sourceLabel.toLowerCase()) + ' cards match known card size profiles.</p>';
-        return;
-    }
-
-    invalidEntries.forEach(function(entry) {
-        var validation = entry.validation;
-        var metrics = validation.metrics;
-        var card = document.createElement('div');
-        card.className = 'validation-result-card invalid';
-
-        var cutMatches = getProfileNames(validation.cutMatches);
-        var bleedMatches = getProfileNames(validation.bleedMatches);
-
-        card.innerHTML = '' +
-            '<div class="validation-result-header">' +
-                '<h5>' + escapeHtml(entry.name) + '</h5>' +
-                '<span class="validation-status-badge invalid">' + escapeHtml(validation.status) + '</span>' +
-            '</div>' +
-            '<div class="validation-metrics">' +
-                '<div class="validation-metric"><span>Width × height</span><strong>' + escapeHtml(metrics.cutWidth + ' × ' + metrics.cutHeight + ' px') + '</strong></div>' +
-                '<div class="validation-metric"><span>Calculated with margin</span><strong>' + escapeHtml(metrics.bleedWidth + ' × ' + metrics.bleedHeight + ' px') + '</strong></div>' +
-                '<div class="validation-metric"><span>Margins</span><strong>' + escapeHtml((metrics.marginX * 100).toFixed(2) + '% × ' + (metrics.marginY * 100).toFixed(2) + '%') + '</strong></div>' +
-            '</div>' +
-            '<div class="validation-result-body">' +
-                '<p class="validation-result-details">' + escapeHtml(validation.details) + '</p>' +
-                '<div class="validation-result-row"><span class="validation-result-label">Cut matches</span><span>' + escapeHtml(cutMatches.length ? cutMatches.join(', ') : 'None') + '</span></div>' +
-                '<div class="validation-result-row"><span class="validation-result-label">Size with margin matches</span><span>' + escapeHtml(bleedMatches.length ? bleedMatches.join(', ') : 'None') + '</span></div>' +
-            '</div>';
-
-        resultsEl.appendChild(card);
-    });
+    return window.creatorValidationService.renderValidationResults(summarySelector, resultsSelector, sourceLabel, entries);
 }
 
 async function refreshLocalValidation() {
-    var summaryEl = document.querySelector('#validation-local-summary');
-    if (summaryEl) {
-        summaryEl.textContent = 'Validating local cards...';
-    }
-
-    if (!(await ensureCardSizeProfilesAvailable())) {
-        var resultsEl = document.querySelector('#validation-local-results');
-        if (summaryEl) {
-            summaryEl.textContent = 'Card size profiles are unavailable, so validation cannot run.';
-        }
-        if (resultsEl) {
-            resultsEl.innerHTML = '<p class="validation-result-empty">Validation unavailable until known card size profiles load.</p>';
-        }
-        return;
-    }
-
-    var entries = getLocalValidationEntries();
-    _lastLocalValidationEntries = entries;
-
-    renderValidationResults('#validation-local-summary', '#validation-local-results', 'Local', entries);
+    await window.creatorValidationService.refreshLocalValidation();
+    _lastLocalValidationEntries = window.creatorValidationService._lastLocalValidationEntries;
 }
 
 async function refreshServerValidation() {
-    var summaryEl = document.querySelector('#validation-server-summary');
-    if (summaryEl) {
-        summaryEl.textContent = 'Validating server cards...';
-    }
-
-    if (!(await ensureCardSizeProfilesAvailable())) {
-        var resultsEl = document.querySelector('#validation-server-results');
-        if (summaryEl) {
-            summaryEl.textContent = 'Card size profiles are unavailable, so validation cannot run.';
-        }
-        if (resultsEl) {
-            resultsEl.innerHTML = '<p class="validation-result-empty">Validation unavailable until known card size profiles load.</p>';
-        }
-        return;
-    }
-
-    if (!_serverSavedCards.length) {
-        await refreshServerAvailableCards('', {skipValidationRefresh: true});
-    }
-
-    var summaries = (_serverSavedCards || []).slice();
-    var entries = await Promise.all(summaries.map(async function(summary) {
-        var name = summary.displayName || summary.legacyKey || summary.id;
-        try {
-            var details = await fetchServerSavedCard(summary.id);
-            return {
-                name: name,
-                validation: inferCardSizeValidation(details.cardJson)
-            };
-        } catch (error) {
-            return {
-                name: name,
-                validation: {
-                    invalid: true,
-                    status: 'Unreadable server card',
-                    metrics: {cutWidth: 0, cutHeight: 0, bleedWidth: 0, bleedHeight: 0, marginX: 0, marginY: 0},
-                    cutMatches: [],
-                    bleedMatches: [],
-                    exactMatches: [],
-                    details: 'Failed to load server card JSON: ' + error
-                }
-            };
-        }
-    }));
-
-    renderValidationResults('#validation-server-summary', '#validation-server-results', 'Server', entries);
+    await window.creatorValidationService.refreshServerValidation();
 }
 
 async function loadValidationTab() {
-    await Promise.all([refreshLocalValidation(), refreshServerValidation()]);
+    await window.creatorValidationService.loadValidationTab();
+    _lastLocalValidationEntries = window.creatorValidationService._lastLocalValidationEntries;
 }
 
 function refreshValidationTabIfVisible() {
-    var validationSection = document.querySelector('#creator-menu-validation');
-    if (validationSection && !validationSection.classList.contains('hidden')) {
-        loadValidationTab();
-    }
+    return window.creatorValidationService.refreshValidationTabIfVisible();
 }
 
 function serializeCurrentCardState() {
