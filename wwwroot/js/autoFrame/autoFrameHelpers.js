@@ -2,7 +2,8 @@
  * Auto Frame Helpers Module
  * Contains all makeXxxFrameByLetter() helper functions that convert color letters
  * to frame layer objects with appropriate masks and bounds.
- */function makeM15FrameByLetter(letter, mask = "", maskToRightHalf = false, style = 'regular') {
+ */
+function makeM15FrameByLetter(letter, mask = "", maskToRightHalf = false, style = 'regular') {
     letter = letter.toUpperCase();
     var frameNames = {
         'W': 'White',
@@ -1577,5 +1578,22 @@ function makeSeventhEditionFrameByLetter(letter, mask = "", maskToRightHalf = fa
 
     return frame;
 }
+
+
+window.autoFrameHelperNames = [
+    'makeM15FrameByLetter',
+    'makeM15NewFrameByLetter',
+    'makeM15EighthFrameByLetter',
+    'makeM15EighthUBFrameByLetter',
+    'makeBorderlessFrameByLetter',
+    'make8thEditionFrameByLetter',
+    'makeExtendedArtFrameByLetter',
+    'makeUBFrameByLetter',
+    'makeCircuitFrameByLetter',
+    'makeEtchedFrameByLetter',
+    'makePhyrexianFrameByLetter',
+    'makeSeventhEditionFrameByLetter'
+];
+window.autoFrameHelpersReady = true;
 
 

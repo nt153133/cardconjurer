@@ -51,3 +51,4 @@ All notable product-facing changes should be added here.
 - Restored grouped Import/Save local-vs-server action card markup and frame helper grid class after partial revert.
 - Frame tab behavior: restored frame preview rendering, frame-list labels, drag/reorder, and frame settings interactions by avoiding conflicting `addFrame(...)` overrides.
 - Frame group bootstrap: restored global `loadFramePacks`/`loadFramePack` availability and script ordering so default frame-group scripts load correctly during Creator startup.
+- Autoframe helper extraction hardening: Creator now verifies `make*FrameByLetter` helpers are loaded before dispatch, showing a clear reload prompt instead of failing with undefined-function runtime errors.

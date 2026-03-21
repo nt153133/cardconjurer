@@ -7,6 +7,35 @@
 
 var autoFramePack;
 
+function ensureAutoFrameHelpersLoaded() {
+    var required = window.autoFrameHelperNames || [
+        'makeM15FrameByLetter',
+        'makeM15NewFrameByLetter',
+        'makeM15EighthFrameByLetter',
+        'makeM15EighthUBFrameByLetter',
+        'makeBorderlessFrameByLetter',
+        'make8thEditionFrameByLetter',
+        'makeExtendedArtFrameByLetter',
+        'makeUBFrameByLetter',
+        'makeCircuitFrameByLetter',
+        'makeEtchedFrameByLetter',
+        'makePhyrexianFrameByLetter',
+        'makeSeventhEditionFrameByLetter'
+    ];
+
+    var missing = required.filter(name => typeof window[name] !== 'function');
+    if (missing.length > 0) {
+        var message = 'Auto Frame helpers are not loaded yet. Please reload the page.';
+        if (typeof notify === 'function') {
+            notify(message, 5);
+        }
+        console.warn(message, missing);
+        return false;
+    }
+
+    return true;
+}
+
 /**
  * Determines frame properties (colors, styles) for a card based on mana cost, type line, and rules text.
  * Used by autoFrame variants to select appropriate frame layers and styles.
@@ -224,6 +253,10 @@ function autoFrame() {
         return;
     }
 
+    if (!ensureAutoFrameHelpersLoaded()) {
+        return;
+    }
+
     // Read text fields with safe fallbacks so no field being missing can throw.
     var typeText  = card.text.type?.text  ?? '';
     var manaText  = card.text.mana?.text  ?? '';
@@ -302,54 +335,37 @@ function autoFrame() {
         autoFramePack = frame;
     }
 
-    var group;
     if (frame == 'M15Regular-1') {
         autoM15Frame(colors, manaText, typeText, ptText);
-        group = 'Standard-3';
     } else if (frame == 'M15RegularNew') {
         autoM15NewFrame(colors, manaText, typeText, ptText);
-        group = 'Accurate';
     } else if (frame == 'M15Eighth') {
         autoM15EighthFrame(colors, manaText, typeText, ptText);
-        group = 'Custom';
     } else if (frame == 'M15EighthUB') {
         autoM15EighthUBFrame(colors, manaText, typeText, ptText);
-        group = 'Custom';
     } else if (frame == 'UB') {
         autoUBFrame(colors, manaText, typeText, ptText);
-        group = 'Showcase-5';
     } else if (frame == 'UBNew') {
         autoUBNewFrame(colors, manaText, typeText, ptText);
-        group = 'Accurate';
     } else if (frame == 'FullArtNew') {
         autoFullArtNewFrame(colors, manaText, typeText, ptText);
-        group = 'Accurate';
     } else if (frame == 'Circuit') {
         autoCircuitFrame(colors, manaText, typeText, ptText);
-        group = 'Custom';
     } else if (frame == 'Etched') {
-        group = 'Showcase-5';
         autoEtchedFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'Praetors') {
-        group = 'Showcase-5';
         autoPhyrexianFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'Seventh') {
-        group = 'Misc-2';
         autoSeventhEditionFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'M15BoxTopper') {
-        group = 'Showcase-5';
         autoExtendedArtFrame(colors, manaText, typeText, ptText, false);
     } else if (frame == 'M15ExtendedArtShort') {
-        group = 'Showcase-5';
         autoExtendedArtFrame(colors, manaText, typeText, ptText, true);
     } else if (frame == '8th') {
-        group = 'Misc-2';
         auto8thEditionFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'Borderless') {
-        group = 'Showcase-5';
         autoBorderlessFrame(colors, manaText, typeText, ptText);
     } else if (frame == 'BorderlessUB') {
-        group = 'Showcase-5';
         autoBorderlessUBFrame(colors, manaText, typeText, ptText);
         frame = 'Borderless';
     }
