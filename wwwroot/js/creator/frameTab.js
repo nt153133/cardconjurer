@@ -212,4 +212,32 @@
         resetDoubleClick,
         doubleClick
     };
+
+    Object.defineProperty(window, 'selectedFrameIndex', {
+        configurable: true,
+        get() {
+            return state.selectedFrameIndex;
+        },
+        set(value) {
+            state.selectedFrameIndex = value;
+        }
+    });
+
+    Object.defineProperty(window, 'selectedMaskIndex', {
+        configurable: true,
+        get() {
+            return state.selectedMaskIndex;
+        },
+        set(value) {
+            state.selectedMaskIndex = value;
+        }
+    });
+
+    window.loadFramePacks = loadFramePacks;
+    window.loadFramePack = loadFramePack;
+    window.autoLoadFrameVersion = autoLoadFrameVersion;
+    window.frameOptionClicked = frameOptionClicked;
+    window.maskOptionClicked = maskOptionClicked;
+    window.resetDoubleClick = resetDoubleClick;
+    window.doubleClick = doubleClick;
 })();

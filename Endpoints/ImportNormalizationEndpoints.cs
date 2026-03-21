@@ -44,6 +44,12 @@ public static class ImportNormalizationEndpoints
             return Results.Ok(service.ProcessScryfallCard(card));
         });
 
+        group.MapPost("/process-scryfall-cards", (List<ScryfallCardDto> cards, ICardImportNormalizationService service) =>
+        {
+            var result = cards.SelectMany(card => service.ProcessScryfallCard(card)).ToList();
+            return Results.Ok(result);
+        });
+
         group.MapPost("/multi-faced", (MultiFaceParseRequest request, ICardImportNormalizationService service) =>
         {
             var result = service.ParseMultiFacedCards(request.Card, request.ContextCards);

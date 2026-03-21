@@ -10,6 +10,8 @@ All notable product-facing changes should be added here.
 - Validation bulk-fix actions: added buttons to update invalid local cards or all local saved cards to the currently selected size profile.
 
 ### Changed
+- Import normalization: migrated client-side `processScryfallCard` to server; `fetchScryfallData`, `fetchScryfallCardByID`, and `fetchScryfallCardByCodeNumber` now delegate face-expansion and language normalization to `POST /api/import-normalization/process-scryfall-card(s)`. Added batch `process-scryfall-cards` endpoint for multi-result search responses. Also fixed a scope bug where the two single-card fetchers incorrectly referenced `unique`/`cardName`/`cardLanguageSelect` from the wrong closure.
+- Import normalization: moved Creator import parse paths to server endpoints (`/from-text`, `/saga`, `/class`, `/roll`, `/station`, `/multi-faced`, `/layout-specific`) and replaced local parser implementations in `creator-23.js` with async API wrappers. Added `AbortController` support to cancel in-flight parse requests when import card index selection changes rapidly.
 - Frame tab UI and autoFrame logic extracted into modular files: `frameTab.js` (frame picker UI), `autoFrameLogic.js` (frame type selection), `autoFrameVariants.js` (frame-specific variants), `autoFrameHelpers.js` (frame layer builders) for improved maintainability.
 - Creator preview info strip: added an under-canvas box showing current size, loaded saved name, and art URL, plus a `Create New` action button.
 - Card size profile controls in Frame: restored profile selector, width/height inputs, apply/reset actions, and load override toggle.
@@ -33,6 +35,8 @@ All notable product-facing changes should be added here.
 - Creator script structure: moved Collector tab behavior (bottom info style/rendering, serial controls, artist sync, and collector defaults/toggles) into `wwwroot/js/creator/collector-tab.js`.
 - Creator script structure: applied safe Frame-tab follow-up split (`wwwroot/js/creator/frameTab.js`) as namespaced picker helpers only, avoiding runtime overrides like `addFrame(...)`.
 - Creator script structure: centralized asset server upload/list/select operations into `wwwroot/js/creator/asset-library.js` and delegated art/frame/set-symbol/watermark library calls to it.
+- Creator script structure: cleanup pass moved Asset Library tab state/UI actions (`switch/load/select-all/deselect/delete/upload`) into `wwwroot/js/creator/asset-library.js` with compatibility delegates in `creator-23.js`.
+- Creator script structure: extracted asset-loading trackers, preview-info/text helpers, shell/tab helpers, image/script loader helpers, and canvas sizing/scaling helpers into `wwwroot/js/creator/asset-loading.js`, `text-utilities.js`, `shell-helpers.js`, `resource-loaders.js`, and `math-utilities.js`, and removed the duplicated implementations from `creator-23.js`.
 - Import/Save download and upload controls regrouped into paired action cards: image downloads (both normal and print-bleed) on one side, cards-file download and upload on the other.
 - Frame options layout: grouped `Rounded Corners`, `Guidelines`, and `Transparencies` on one line and added `Show Cut/Safe Overlay` toggle.
 - Validation review output now renders as spaced flowing cards with structured details instead of dense unseparated text.
@@ -46,3 +50,4 @@ All notable product-facing changes should be added here.
 - Creator startup stability: guarded optional DOM lookups (`#autoFrame`, `#autoframe-always-nyx`, `#art-update-autofit`) to prevent null-reference crashes.
 - Restored grouped Import/Save local-vs-server action card markup and frame helper grid class after partial revert.
 - Frame tab behavior: restored frame preview rendering, frame-list labels, drag/reorder, and frame settings interactions by avoiding conflicting `addFrame(...)` overrides.
+- Frame group bootstrap: restored global `loadFramePacks`/`loadFramePack` availability and script ordering so default frame-group scripts load correctly during Creator startup.

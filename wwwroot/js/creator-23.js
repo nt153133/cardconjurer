@@ -46,103 +46,7 @@ function getStandardHeight() {
     return parseInt(localStorage.getItem('standardCardHeight')) || DEFAULT_CARD_HEIGHT;
 }
 
-// Trackers for bulk download
-window.ImageLoadTracker = {
-    promises: [],
-    isTracking: false,
-
-    // Call this to start a new tracking session.
-    start: function () {
-        this.promises = [];
-        this.isTracking = true;
-    },
-
-    // Call this to end the session.
-    stop: function () {
-        this.isTracking = false;
-        this.promises = [];
-    },
-
-    /**
-     * Creates a promise that resolves when the image from 'src' is loaded.
-     * Adds this promise to the tracking array.
-     * @param {string} src - The source URL of the image to load.
-     */
-    track: function (src) {
-        // Only track if a session is active and the src is valid.
-        if (!this.isTracking || !src || src.includes('blank.png')) {
-            return;
-        }
-
-        const promise = new Promise((resolve) => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            // Resolve the promise on load.
-            img.onload = () => resolve(img);
-            // Also resolve on error to prevent Promise.all from failing on a single broken image.
-            // The app's own error handlers will manage displaying a blank image.
-            img.onerror = () => {
-                logWarn(`Could not load tracked image: ${src}`);
-                resolve(null);
-            };
-            img.src = src;
-        });
-        this.promises.push(promise);
-    },
-
-    /**
-     * Returns a single promise that resolves when all tracked images have finished loading.
-     */
-    waitForAll: function () {
-        return Promise.all(this.promises);
-    }
-};
-window.FontLoadTracker = {
-    fonts: new Set(),
-    isTracking: false,
-
-    // Call this to start a new font tracking session.
-    start: function () {
-        this.fonts.clear();
-        this.isTracking = true;
-    },
-
-    // Call this to end the session.
-    stop: function () {
-        this.isTracking = false;
-        this.fonts.clear();
-    },
-
-    /**
-     * Adds a font family to the set of required fonts for the current card.
-     * @param {string} fontFamily - The name of the font family to track (e.g., 'belerenbsc').
-     */
-    track: function (fontFamily) {
-        if (this.isTracking && fontFamily) {
-            this.fonts.add(fontFamily);
-        }
-    },
-
-    /**
-     * Uses the document.fonts API to wait for all tracked fonts to be loaded and ready.
-     * @returns {Promise} A promise that resolves when all fonts in the set are available.
-     */
-    waitForAll: function () {
-        if (this.fonts.size === 0) {
-            return Promise.resolve(); // No fonts to wait for.
-        }
-
-        const fontPromises = [];
-        // The document.fonts.load() method checks if a font is ready for use.
-        // It requires a size (e.g., '12px'), but the family name is the crucial part.
-        for (const font of this.fonts) {
-            fontPromises.push(document.fonts.load(`12px ${font}`));
-        }
-
-        logDebug('Waiting for fonts to load:', Array.from(this.fonts));
-        return Promise.all(fontPromises);
-    }
-};
+// Asset loading trackers are defined in creator/asset-loading.js
 
 //card object
 var card = {
@@ -227,16 +131,6 @@ watermark.onload = watermarkEdited;
 var previewCanvas = document.querySelector('#previewCanvas');
 var previewContext = previewCanvas.getContext('2d');
 var canvasList = [];
-//frame/mask picker stuff
-var availableFrames = [];
-var selectedFrame = null;
-var selectedFrameIndex = 0;
-var selectedMaskIndex = 0;
-var selectedTextIndex = 0;
-var replacementMasks = {};
-var customCount = 0;
-var lastFrameClick = null;
-var lastMaskClick = null;
 //for imports
 var scryfallArt;
 var scryfallCard;
@@ -258,40 +152,7 @@ var loadedVersions = [];
 var suppressProfilePlacementOverlay = false;
 var _currentLoadedCardName = '';
 
-function truncateInfoText(value, maxLength = 96) {
-    var text = String(value || '');
-    if (text.length <= maxLength) {
-        return text;
-    }
-    return text.slice(0, maxLength - 3) + '...';
-}
-
-function updateCreatorPreviewInfo() {
-    var sizeEl = document.querySelector('#creator-info-size');
-    var nameEl = document.querySelector('#creator-info-loaded-name');
-    var artEl = document.querySelector('#creator-info-art-url');
-    if (!sizeEl || !nameEl || !artEl) {
-        return;
-    }
-
-    var width = Number(card && card.width) || 0;
-    var height = Number(card && card.height) || 0;
-    sizeEl.textContent = width + ' x ' + height + ' px';
-
-    nameEl.textContent = _currentLoadedCardName || 'Not loaded';
-    nameEl.title = _currentLoadedCardName || '';
-
-    var artUrl = card && card.artSource ? String(card.artSource) : '/img/blank.png';
-    artEl.textContent = truncateInfoText(artUrl);
-    artEl.title = artUrl;
-}
-
-function createNewCardFromPreview() {
-    if (!confirm('Create a new card? Unsaved changes will be lost.')) {
-        return;
-    }
-    window.location.reload();
-}
+// Text utilities are defined in creator/text-utilities.js
 
 //Card Object managament
 async function resetCardIrregularities(options = {}) {
@@ -411,24 +272,7 @@ async function resetCardIrregularities(options = {}) {
 
 // Collector tab logic moved to /js/creator/collector-tab.js.
 
-//Canvas management
-function sizeCanvas(name, width = Math.round(card.width * (1 + 2 * card.marginX)), height = Math.round(card.height * (1 + 2 * card.marginY))) {
-    if (!window[name + 'Canvas']) {
-        window[name + 'Canvas'] = document.createElement('canvas');
-        window[name + 'Context'] = window[name + 'Canvas'].getContext('2d');
-        canvasList[canvasList.length] = name;
-    }
-    window[name + 'Canvas'].width = width;
-    window[name + 'Canvas'].height = height;
-    if (name == 'line') { //force true to view all canvases - must restore to name == 'line' for proper kerning adjustments
-        window[name + 'Canvas'].style = 'width: 20rem; height: 28rem; border: 1px solid red;';
-        const label = document.createElement('div');
-        label.innerHTML = name + '<br>If you can see this and don\'t want to, please clear your cache.';
-        label.appendChild(window[name + 'Canvas']);
-        label.classList = 'fake-hidden'; //Comment this out to view canvases
-        document.body.appendChild(label);
-    }
-}
+// Canvas management utilities are defined in creator/math-utilities.js.
 
 //create main canvases
 sizeCanvas('card');
@@ -444,22 +288,7 @@ sizeCanvas('guidelines');
 sizeCanvas('profileOverlay');
 sizeCanvas('prePT');
 
-//Scaling
-function scaleX(input) {
-    return Math.round((input + card.marginX) * card.width);
-}
-
-function scaleWidth(input) {
-    return Math.round(input * card.width);
-}
-
-function scaleY(input) {
-    return Math.round((input + card.marginY) * card.height);
-}
-
-function scaleHeight(input) {
-    return Math.round(input * card.height);
-}
+// Scaling utilities are defined in creator/math-utilities.js.
 
 // ── Canvas Size Settings ──────────────────────────────────────────────────────
 async function applyStandardCardSize() {
@@ -811,120 +640,10 @@ function initCardSizeSettings() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-//Other nifty functions
-function getElementIndex(element) {
-    return Array.prototype.indexOf.call(element.parentElement.children, element);
-}
+// General creator shell/UI helpers are defined in creator/shell-helpers.js.
 
-function getCardName() {
-    if (card.text == undefined || card.text.title == undefined) {
-        return 'unnamed';
-    }
-    var imageName = card.text.title.text || 'unnamed';
-    if (card.text.nickname) {
-        imageName += ' (' + card.text.nickname.text + ')';
-    }
-    return imageName.replace(/\{[^}]+}/g, '');
-}
-
-function getInlineCardName() {
-    if (card.text == undefined || card.text.title == undefined) {
-        return 'unnamed';
-    }
-    var imageName = card.text.title.text || 'unnamed';
-    if (card.text.nickname) {
-        imageName = card.text.nickname.text;
-    }
-    return imageName.replace(/\{[^}]+}/g, '');
-}
-
-//UI
-function toggleCreatorTabs(event, target) {
-    Array.from(document.querySelector('#creator-menu-sections').children).forEach(element => element.classList.add('hidden'));
-    document.querySelector('#creator-menu-' + target).classList.remove('hidden');
-    selectSelectable(event);
-}
-
-function selectSelectable(event) {
-    var eventTarget = event.target.closest('.selectable');
-    Array.from(eventTarget.parentElement.children).forEach(element => element.classList.remove('selected'));
-    eventTarget.classList.add('selected');
-}
-
-function dragStart(event) {
-    Array.from(document.querySelectorAll('.dragging')).forEach(element => element.classList.remove('dragging'));
-    event.target.closest('.draggable').classList.add('dragging');
-}
-
-function dragEnd(event) {
-    Array.from(document.querySelectorAll('.dragging')).forEach(element => element.classList.remove('dragging'));
-}
-
-function touchMove(event) {
-    if (event.target.nodeName != 'H4') {
-        event.preventDefault();
-    }
-    var clientX = event.touches[0].clientX;
-    var clientY = event.touches[0].clientY;
-    Array.from(document.querySelector('.dragging').parentElement.children).forEach(element => {
-        var elementBounds = element.getBoundingClientRect();
-        if (clientY > elementBounds.top && clientY < elementBounds.bottom) {
-            dragOver(element, false);
-        }
-    })
-}
-
-function dragOver(event, drag = true) {
-    var eventTarget;
-    if (drag) {
-        eventTarget = event.target.closest('.draggable');
-    } else {
-        eventTarget = event;
-    }
-    var movingElement = document.querySelector('.dragging');
-    if (document.querySelector('.dragging') && !eventTarget.classList.contains('dragging') && eventTarget.parentElement == movingElement.parentElement) {
-        var parentElement = eventTarget.parentElement;
-        var elements = document.createDocumentFragment();
-        var movingElementPassed = false;
-        var movingElementOldIndex = -1;
-        var movingElementNewIndex = -1;
-        Array.from(parentElement.children).forEach((element, index) => {
-            if (element == eventTarget) {
-                movingElementNewIndex = index;
-                if (movingElementPassed) {
-                    elements.appendChild(element.cloneNode(true));
-                    elements.appendChild(movingElement.cloneNode(true));
-                } else {
-                    elements.appendChild(movingElement.cloneNode(true));
-                    elements.appendChild(element.cloneNode(true));
-                }
-            } else if (element != movingElement) {
-                elements.appendChild(element.cloneNode(true));
-            } else {
-                movingElementOldIndex = index;
-                movingElementPassed = true;
-            }
-        });
-        Array.from(elements.children).forEach(element => {
-            element.ondragstart = dragStart;
-            element.ontouchstart = dragStart;
-            element.ondragend = dragEnd;
-            element.ontouchend = dragEnd;
-            element.ondragover = dragOver;
-            element.ontouchmove = touchMove;
-            element.onclick = frameElementClicked;
-            element.children[3].onclick = removeFrame;
-        })
-        parentElement.innerHTML = null;
-        parentElement.appendChild(elements);
-        if (movingElementNewIndex >= 0) {
-            var originalMovingElement = card.frames[movingElementOldIndex];
-            card.frames.splice(movingElementOldIndex, 1);
-            card.frames.splice(movingElementNewIndex, 0, originalMovingElement);
-            drawFrames();
-        }
-    }
-}
+// Frame list drag-and-drop helpers are defined in creator/drag-drop.js.
+// dragStart, dragEnd, touchMove, dragOver
 
 //Set Symbols
 // setSymbolAliases Map → creator-23.constants.js
@@ -1011,143 +730,6 @@ function drawFrames() {
     drawCard();
 }
 
-function loadFramePacks(framePackOptions = []) {
-    document.querySelector('#selectFramePack').innerHTML = null;
-    framePackOptions.forEach(item => {
-        var framePackOption = document.createElement('option');
-        framePackOption.innerHTML = item.name;
-        if (item.value == 'disabled') {
-            framePackOption.disabled = true;
-        } else {
-            framePackOption.value = item.value;
-        }
-        document.querySelector('#selectFramePack').appendChild(framePackOption);
-    });
-    loadScript("/js/frames/pack" + document.querySelector('#selectFramePack').value + ".js");
-}
-
-function loadFramePack(frameOptions = availableFrames) {
-    resetDoubleClick();
-    document.querySelector('#frame-picker').innerHTML = null;
-    frameOptions.forEach(item => {
-        var frameOption = document.createElement('div');
-        frameOption.classList = 'frame-option hidden';
-        frameOption.onclick = frameOptionClicked;
-        var frameOptionImage = document.createElement('img');
-        frameOption.appendChild(frameOptionImage);
-        frameOptionImage.onload = function () {
-            this.parentElement.classList.remove('hidden');
-        }
-        if (!item.noThumb && !item.src.includes('/img/black.png')) {
-            frameOptionImage.src = fixUri(item.src.replace('.png', 'Thumb.png').replace('.svg', 'Thumb.png'));
-        } else {
-            frameOptionImage.src = fixUri(item.src);
-        }
-        document.querySelector('#frame-picker').appendChild(frameOption);
-
-    })
-    document.querySelector('#mask-picker').innerHTML = '';
-    document.querySelector('#frame-picker').children[0].click();
-    if (localStorage.getItem('autoLoadFrameVersion') == 'true') {
-        document.querySelector('#loadFrameVersion').click();
-    }
-}
-
-function autoLoadFrameVersion() {
-    localStorage.setItem('autoLoadFrameVersion', document.querySelector('#autoLoadFrameVersion').checked);
-}
-
-function frameOptionClicked(event) {
-    const button = doubleClick(event, 'frame');
-    const clickedFrameOption = event.target.closest('.frame-option');
-    const newFrameIndex = getElementIndex(clickedFrameOption);
-    if (newFrameIndex != selectedFrameIndex || document.querySelector('#mask-picker').innerHTML == '') {
-        resetDoubleClick();
-        Array.from(document.querySelectorAll('.frame-option.selected')).forEach(element => element.classList.remove('selected'));
-        clickedFrameOption.classList.add('selected');
-        selectedFrameIndex = newFrameIndex;
-        if (!availableFrames[selectedFrameIndex].noDefaultMask) {
-            document.querySelector('#mask-picker').innerHTML = '<div class="mask-option" onclick="maskOptionClicked(event)"><img src="' + black.src + '"><p>No Mask</p></div>';
-        } else {
-            document.querySelector('#mask-picker').innerHTML = '';
-        }
-        document.querySelector('#selectedPreview').innerHTML = '(Selected: ' + availableFrames[selectedFrameIndex].name + ', No Mask)';
-        if (availableFrames[selectedFrameIndex].masks) {
-            availableFrames[selectedFrameIndex].masks.forEach(item => {
-                const maskOption = document.createElement('div');
-                maskOption.classList = 'mask-option hidden';
-                maskOption.onclick = maskOptionClicked;
-                const maskOptionImage = document.createElement('img');
-                maskOption.appendChild(maskOptionImage);
-                maskOptionImage.onload = function () {
-                    this.parentElement.classList.remove('hidden');
-                }
-                maskOptionImage.src = fixUri(item.src.replace('.png', 'Thumb.png').replace('.svg', 'Thumb.png'));
-                const maskOptionLabel = document.createElement('p');
-                maskOptionLabel.innerHTML = item.name;
-                maskOption.appendChild(maskOptionLabel);
-                document.querySelector('#mask-picker').appendChild(maskOption);
-            });
-        }
-        const firstChild = document.querySelector('#mask-picker').firstChild;
-        firstChild.classList.add('selected');
-        firstChild.click();
-    } else if (button) {
-        button.click();
-        resetDoubleClick();
-    }
-}
-
-function maskOptionClicked(event) {
-    var button = doubleClick(event, 'mask');
-    const clickedMaskOption = event.target.closest('.mask-option');
-    (document.querySelector('.mask-option.selected').classList || document.querySelector('body').classList).remove('selected');
-    clickedMaskOption.classList.add('selected');
-    const newMaskIndex = getElementIndex(clickedMaskOption)
-    if (newMaskIndex != selectedMaskIndex) {
-        button = null;
-    }
-    selectedMaskIndex = newMaskIndex;
-    var selectedMaskName = 'No Mask'
-    if (selectedMaskIndex > 0) {
-        selectedMaskName = availableFrames[selectedFrameIndex].masks[selectedMaskIndex - 1].name;
-    }
-    document.querySelector('#selectedPreview').innerHTML = '(Selected: ' + availableFrames[selectedFrameIndex].name + ', ' + selectedMaskName + ')';
-    if (button) {
-        button.click();
-        resetDoubleClick();
-    }
-}
-
-function resetDoubleClick() {
-    lastFrameClick, lastMaskClick = null, null;
-}
-
-function doubleClick(event, maskOrFrame) {
-    const currentClick = (new Date()).getTime();
-    var lastClick = null;
-    if (maskOrFrame == 'mask') {
-        lastClick = lastMaskClick;
-        lastMaskClick = currentClick;
-    } else {
-        lastClick = lastFrameClick + 0;
-        lastFrameClick = currentClick;
-    }
-    if (lastClick && lastClick + 500 > currentClick) {
-        var buttonID = null;
-        if (event.shiftKey) {
-            buttonID = '#addToRightHalf';
-        } else if (event.ctrlKey) {
-            buttonID = '#addToLeftHalf';
-        } else if (event.altKey) {
-            buttonID = '#addToMiddleThird';
-        } else {
-            buttonID = '#addToFull';
-        }
-        return document.querySelector(buttonID);
-    }
-    return null;
-}
 
 function cardFrameProperties(colors, manaCost, typeLine, power, style) {
     var colors = colors.map(color => color.toUpperCase())
@@ -5896,7 +5478,7 @@ async function pasteCardText() {
     try {
         const text = await navigator.clipboard.readText();
         logDebug('Clipboard text read for import. Length:', text ? text.length : 0);
-        const card = scryfallCardFromText(text);
+        const card = await scryfallCardFromText(text);
         importCard([card]);
     } catch (err) {
         logError('Failed to read clipboard text: ', err);
@@ -5904,420 +5486,105 @@ async function pasteCardText() {
     }
 }
 
-function scryfallCardFromText(text) {
-    var lines = text.trim().split("\n");
-
-    if (lines.count == 0) {
-        return {};
-    }
-
-    lines = lines.map(item => item.trim()).filter(item => item != "");
-
-    var name = lines.shift();
-    var manaCost;
-    var manaCostStartIndex = name.indexOf("{");
-    if (manaCostStartIndex > 0) {
-        manaCost = name.substring(manaCostStartIndex).trim();
-        name = name.substring(0, manaCostStartIndex).trim();
-    }
-
-    var cardObject = {
-        "name": name,
-        "lang": "en"
-    };
-
-    if (manaCost !== undefined) {
-        cardObject.mana_cost = manaCost;
-    }
-
-    if (lines.count == 0) {
-        return cardObject;
-    }
-
-    cardObject.type_line = lines.shift().trim();
-
-    if (lines.count == 0) {
-        return cardObject;
-    }
-
-    var regex = /[0-9+\-*]+\/[0-9+*]+/
-    var match = lines[lines.length - 1].match(regex);
-    if (match) {
-        var pt = match[0].split("/");
-        cardObject.power = pt[0];
-        cardObject.toughness = pt[1];
-        lines.pop();
-    }
-
-    if (lines.count == 0) {
-        return cardObject;
-    }
-
-    cardObject.oracle_text = lines.join("\n");
-
-    return cardObject;
-}
-
-function parseSagaAbilities(text) {
-    const stepsMap = {};
-
-    // Remove reminder text
-    const abilityText = text.replace(/^\(.*?\)\s*/, '');
-
-    // Match "I — ability" or "I, II — ability"
-    const regex = /([IVX, ]+)\s+—\s+([^]+?)(?=(?:\n[IVX, ]+\s+—|$))/g;
-
-    let match;
-    while ((match = regex.exec(abilityText)) !== null) {
-        const stepsRaw = match[1].split(',').map(s => s.trim());
-        const ability = match[2].trim();
-
-        for (const step of stepsRaw) {
-            stepsMap[step] = ability;
-        }
-    }
-
-    // Lore step order
-    const loreOrder = Array.from({length: 24}, (_, i) => romanNumeral(i + 1));
-
-    // Track deduplicated abilities in order with count of steps
-    const abilityMap = new Map();
-
-    for (const step of loreOrder) {
-        const ability = stepsMap[step];
-        if (!ability) continue;
-
-        if (abilityMap.has(ability)) {
-            abilityMap.get(ability).steps += 1;
-        } else {
-            abilityMap.set(ability, {ability, steps: 1});
-        }
-    }
-
-    return Array.from(abilityMap.values());
-}
-
-function extractSagaReminderText(text) {
-    const match = text.match(/^\([^)]*\)/);
-    return match ? match[0] : null;
-}
-
-function parseClassAbilities(text) {
-    const lines = text.split('\n'); // Split text into lines
-    const abilities = [];
-    let reminderText = '';
-    let currentLevel = 1;
-
-    // Check if the first line is reminder text
-    if (lines[0].startsWith('(')) {
-        reminderText = lines.shift(); // Extract reminder text
-    }
-
-    // Process each line
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-
-        // Check for "{cost}: Level X" format
-        const levelMatch = line.match(/^(\{.*?}):\s*Level \d+/); // Match cost and level
-        if (levelMatch) {
-            const cost = `${levelMatch[1]}:`; // Extract cost (e.g., "{G}")
-            const ability = lines[i + 1]?.trim() || ''; // Get the next line as ability text
-            abilities.push({cost, ability});
-            i++; // Skip the next line since it's already processed
-            currentLevel++;
-        } else if (abilities.length === 0) {
-            // Handle the first level's ability text without "Level" heading
-            abilities.push({cost: '', ability: line});
-        }
-    }
-
-    // Prepend reminder text to the first ability if it exists
-    if (reminderText && abilities.length > 0) {
-        abilities[0].ability = `${reminderText}{lns}{bar}{lns}${abilities[0].ability}`;
-    }
-
-    return abilities;
-}
-
-function parseMultiFacedCards(card) {
-    let [frontFace, backFace] = card.card_faces ?? []
-
-    if (card.object === "card_face") {
-        // Battle cards: find faces from scryfallCard array
-        frontFace = card;
-        backFace = scryfallCard.find(face =>
-            face.object === "card_face" &&
-            face.name !== card.name
-        );
-    }
-
-    if (!frontFace || !backFace) {
-        console.error('Could not find both faces for multi-faced card');
-        return null;
-    }
-
-    // Single processing logic for both types
-    const faces = {
-        front: {
-            name: frontFace.name || '',
-            type: frontFace.type_line || '',
-            rules: frontFace.oracle_text || '',
-            mana: frontFace.mana_cost || '',
-            pt: frontFace.power ? `${frontFace.power}/${frontFace.toughness}` : '',
-            defense: frontFace.defense || '',
-            flavor: frontFace.flavor_text || ''
-        },
-        back: {
-            name: backFace.name || '',
-            type: backFace.type_line || '',
-            rules: backFace.oracle_text || '',
-            mana: backFace.mana_cost || '',
-            pt: backFace.power ? `${backFace.power}/${backFace.toughness}` : '',
-            defense: backFace.defense || '',
-            flavor: backFace.flavor_text || ''
-        }
-    };
-
-    return faces;
-}
-
-function parseLevelerCard(card) {
-    if (card.layout !== 'leveler' || !card.oracle_text) {
-        console.error('Not a valid leveler card');
-        return null;
-    }
-
-    const oracleText = card.oracle_text;
-
-    // Parse the oracle text sections
-    const sections = oracleText.split('\n');
-
-    // Find level up cost (first line)
-    const levelUpMatch = sections[0].match(/Level up (.+?) \((.+?)\)/);
-    const levelUpCost = levelUpMatch ? levelUpMatch[1] : '';
-    const levelUpReminder = levelUpMatch ? levelUpMatch[2] : '';
-
-    // Find level ranges and their content
-    const levelSections = [];
-    let currentSection = null;
-
-    for (let i = 1; i < sections.length; i++) {
-        const line = sections[i];
-
-        // Check if this line defines a level range
-        const levelMatch = line.match(/^LEVEL (.+)$/);
-        if (levelMatch) {
-            if (currentSection) {
-                levelSections.push(currentSection);
-            }
-            currentSection = {
-                levelRange: levelMatch[1],
-                content: []
-            };
-        } else if (currentSection && line.trim()) {
-            currentSection.content.push(line);
-        }
-    }
-
-    // Add the last section if it exists
-    if (currentSection) {
-        levelSections.push(currentSection);
-    }
-
-    // Extract data for each level
-    const parsedData = {
-        layout: 'leveler', // Add this line for consistency
-        name: card.name || '',
-        type: card.type_line || '',
-        mana: card.mana_cost || '',
-        basePT: card.power && card.toughness ? `${card.power}/${card.toughness}` : '',
-        levelUpCost: levelUpCost,
-        levelUpText: `Level up ${levelUpCost} {i}(${levelUpReminder}){/i}`,
-        levels: []
-    };
-
-    // Process each level section
-    levelSections.forEach(section => {
-        const levelData = {
-            range: section.levelRange,
-            pt: '',
-            abilities: []
-        };
-
-        // Look for P/T in the content (usually looks like "2/3")
-        const ptMatch = section.content.find(line => /^\d+\/\d+$/.test(line.trim()));
-        if (ptMatch) {
-            levelData.pt = ptMatch.trim();
-            // Remove P/T from abilities
-            levelData.abilities = section.content.filter(line => line.trim() !== ptMatch.trim());
-        } else {
-            levelData.abilities = section.content;
-        }
-
-        // Join abilities into a single text block
-        levelData.rulesText = levelData.abilities.join('\n');
-
-        parsedData.levels.push(levelData);
-    });
-
-    return parsedData;
-}
-
-function parsePrototypeLayout(card) {
-    if (card.layout !== 'prototype' || !card.oracle_text) {
-        console.error('Not a valid prototype card');
-        return null;
-    }
-
-    const oracleText = card.oracle_text;
-
-    // Match the entire prototype line: "Prototype {1}{U}{U} — 2/1 (reminder text)"
-    const prototypeMatch = oracleText.match(/^Prototype (.+?) — (\d+)\/(\d+) \((.+?)\)/);
-
-    if (!prototypeMatch) {
-        console.error('Could not parse prototype information');
-        return null;
-    }
-
-    const prototypeCost = prototypeMatch[1];
-    const prototypePower = prototypeMatch[2];
-    const prototypeToughness = prototypeMatch[3];
-    const prototypeReminder = prototypeMatch[4];
-
-    // Split by newlines and remove the first line (which contains the prototype)
-    const lines = oracleText.split('\n');
-    const mainRules = lines.slice(1).join('\n').trim();
-
-    return {
-        layout: 'prototype',
-        name: card.name || '',
-        type: card.type_line || '',
-        mana: card.mana_cost || '',
-        basePT: card.power && card.toughness ? `${card.power}/${card.toughness}` : '',
-        rules: mainRules,
-        prototype: {
-            cost: prototypeCost,
-            pt: `${prototypePower}/${prototypeToughness}`,
-            reminderText: `Prototype ${prototypeCost} — ${prototypePower}/${prototypeToughness} {i}(${prototypeReminder}){/i}`
-        }
-    };
-}
-
-function parseMutateLayout(card) {
-    if (card.layout !== 'mutate' || !card.oracle_text) {
-        console.error('Not a valid mutate card');
-        return null;
-    }
-
-    const oracleText = card.oracle_text;
-
-    // Match the mutate line: "Mutate {3}{B} (reminder text)"
-    const mutateMatch = oracleText.match(/^Mutate (.+?) \((.+?)\)/);
-
-    if (!mutateMatch) {
-        console.error('Could not parse mutate information');
-        return null;
-    }
-
-    const mutateCost = mutateMatch[1];
-    const mutateReminder = mutateMatch[2];
-
-    // Split by newlines and remove the first line (which contains the mutate)
-    const lines = oracleText.split('\n');
-    const mainRules = lines.slice(1).join('\n').trim();
-
-    return {
-        layout: 'mutate',
-        name: card.name || '',
-        type: card.type_line || '',
-        mana: card.mana_cost || '',
-        basePT: card.power && card.toughness ? `${card.power}/${card.toughness}` : '',
-        rules: mainRules,
-        mutate: {
-            cost: mutateCost,
-            reminderText: `Mutate ${mutateCost} {i}(${mutateReminder}){/i}`
-        }
-    };
-}
-
-function parseVanguardLayout(card) {
-    if (card.layout !== 'vanguard' || !card.oracle_text) {
-        console.error('Not a valid vanguard card');
-        return null;
-    }
-
-    return {
-        layout: 'vanguard',
-        name: card.name || '',
-        type: card.type_line || '',
-        rules: card.oracle_text || '',
-        flavor: card.flavor_text || '',
-        handModifier: card.hand_modifier || '',
-        lifeModifier: card.life_modifier || ''
-    };
-}
-
-function parseRollAbilities(text) {
-    // Check if this is a roll card
-    if (!text.toLowerCase().includes('roll a d20')) {
-        return null;
-    }
-
-    let modifiedText = text;
-    const lines = text.split('\n');
-
-    // Skip the first line ("Roll a d20.")
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-
-        // Match patterns like "1—9 | ability" or "20 | ability"
-        const rollMatch = line.match(/^(\d+(?:—\d+)?)\s*\|\s*(.+)$/);
-        if (rollMatch) {
-            const range = rollMatch[1];
-            const ability = rollMatch[2];
-
-            // Replace the line with the roll tag format
-            const newLine = `{roll${range}} ${ability}`;
-            modifiedText = modifiedText.replace(line, newLine);
-        }
-    }
-
-    return modifiedText;
-}
-
-function parseStationCard(oracleText) {
-    if (!oracleText || !oracleText.includes('Station')) {
-        return null;
-    }
-
-    // Split the oracle text by STATION markers to get the pre-station text
-    const parts = oracleText.split(/STATION \d+\+/);
-
-    // The first part is the pre-station text (before any STATION abilities)
-    let preStationText = parts[0].trim();
-
-    // Format station reminder text with italics
-    preStationText = preStationText.replace(/Station (\([^)]+\))/g, 'Station {i}$1{/i}');
-
-    // Updated regex to match new scryfall format: "10+ | ability text"
-    const stationRegex = /(\d+\+)\s*\|\s*([^\n]+)/g;
-    const stationAbilities = [];
-
-    let match;
-    while ((match = stationRegex.exec(oracleText)) !== null) {
-        stationAbilities.push({
-            number: match[1], // e.g., "1+", "8+"
-            text: match[2].trim()
+var importParseController = null;
+
+async function postImportNormalization(endpoint, body, allowNotFound = false, signal = null) {
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+            signal: signal
         });
+        if (allowNotFound && response.status === 404) {
+            return null;
+        }
+        if (!response.ok) {
+            logError('Import normalization request failed:', endpoint, response.status);
+            return null;
+        }
+        return await response.json();
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            logDebug('Import parse request cancelled:', endpoint);
+            return null;
+        }
+        logError('Import normalization request error:', endpoint, err);
+        return null;
     }
-
-    return {
-        preStationText: preStationText,
-        stationAbilities: stationAbilities
-    };
 }
 
-function changeCardIndex() {
+async function scryfallCardFromText(text, signal = null) {
+    return await postImportNormalization('/api/import-normalization/from-text', {text}, false, signal) || {};
+}
+
+async function parseSagaData(text, signal = null) {
+    return await postImportNormalization('/api/import-normalization/saga', {text}, false, signal) || {abilities: [], reminderText: null};
+}
+
+async function parseClassAbilities(text, signal = null) {
+    const abilities = await postImportNormalization('/api/import-normalization/class', {text}, false, signal);
+    return Array.isArray(abilities) ? abilities : [];
+}
+
+function normalizeLayoutData(layoutData) {
+    if (!layoutData) {
+        return null;
+    }
+    if (layoutData.basePT === undefined && layoutData.basePt !== undefined) {
+        layoutData.basePT = layoutData.basePt;
+    }
+    return layoutData;
+}
+
+async function parseMultiFacedCards(card, signal = null) {
+    return await postImportNormalization('/api/import-normalization/multi-faced', {
+        card: card,
+        contextCards: scryfallCard
+    }, false, signal);
+}
+
+async function parseLayoutSpecific(card, signal = null) {
+    return await postImportNormalization('/api/import-normalization/layout-specific', card, false, signal);
+}
+
+async function parseLevelerCard(card, signal = null) {
+    const result = await parseLayoutSpecific(card, signal);
+    return normalizeLayoutData(result && result.leveler);
+}
+
+async function parsePrototypeLayout(card, signal = null) {
+    const result = await parseLayoutSpecific(card, signal);
+    return normalizeLayoutData(result && result.prototype);
+}
+
+async function parseMutateLayout(card, signal = null) {
+    const result = await parseLayoutSpecific(card, signal);
+    return normalizeLayoutData(result && result.mutate);
+}
+
+async function parseVanguardLayout(card, signal = null) {
+    const result = await parseLayoutSpecific(card, signal);
+    return normalizeLayoutData(result && result.vanguard);
+}
+
+async function parseRollAbilities(text, signal = null) {
+    const result = await postImportNormalization('/api/import-normalization/roll', {text}, false, signal);
+    return result ? result.text : null;
+}
+
+async function parseStationCard(oracleText, signal = null) {
+    return await postImportNormalization('/api/import-normalization/station', {text: oracleText}, true, signal);
+}
+
+async function changeCardIndex() {
+    // Abort any in-flight parse requests from a previous import selection
+    if (importParseController) {
+        importParseController.abort();
+    }
+    importParseController = new AbortController();
+    const signal = importParseController.signal;
+
     let cardToImport = scryfallCard[document.querySelector('#import-index').value];
     // Add debug logging for card Layout detection
     logDebug('Card layout:', cardToImport.layout);
@@ -6381,11 +5648,8 @@ function changeCardIndex() {
     const multiFacedVersions = ['flip', 'split', 'fuse', 'aftermath', 'adventure', 'omen', 'room', 'battle', 'transform', 'modal'];
     const isMultiFacedVersion = multiFacedVersions.some(keyword => card.version.toLowerCase().includes(keyword));
     if (['flip', 'modal_dfc', 'transform', 'split', 'adventure'].includes(cardToImport.layout) && isMultiFacedVersion) {
-        const flipData = parseMultiFacedCards(cardToImport);
-        if (!flipData) {
-            console.error('Failed to parse Multi Faced card data');
-            return;
-        }
+        const flipData = await parseMultiFacedCards(cardToImport, signal);
+        if (signal.aborted) return;
 
         // Add artist info
         if (cardToImport.artist) {
@@ -6471,13 +5735,19 @@ function changeCardIndex() {
         let uniqueData;
 
         if (cardToImport.layout === 'leveler') {
-            uniqueData = parseLevelerCard(cardToImport);
+            uniqueData = await parseLevelerCard(cardToImport, signal);
         } else if (cardToImport.layout === 'prototype') {
-            uniqueData = parsePrototypeLayout(cardToImport);
+            uniqueData = await parsePrototypeLayout(cardToImport, signal);
         } else if (cardToImport.layout === 'mutate') {
-            uniqueData = parseMutateLayout(cardToImport);
+            uniqueData = await parseMutateLayout(cardToImport, signal);
         } else if (cardToImport.layout === 'vanguard') {
-            uniqueData = parseVanguardLayout(cardToImport);
+            uniqueData = await parseVanguardLayout(cardToImport, signal);
+        }
+
+        if (signal.aborted) return;
+        if (!uniqueData) {
+            logError('Failed to parse unique layout data for imported card layout:', cardToImport.layout);
+            return;
         }
 
         // Add artist info
@@ -6592,7 +5862,8 @@ function changeCardIndex() {
             card.station.badgeValues[2] = '';
         }
 
-        const stationData = parseStationCard(cardToImport.oracle_text);
+        const stationData = await parseStationCard(cardToImport.oracle_text, signal);
+        if (signal.aborted) return;
         const name = (cardToImport.printed_name || cardToImport.name || '').replace(/^A-/, '{alchemy}');
 
         // Populate basic text fields
@@ -6758,7 +6029,8 @@ function changeCardIndex() {
     if (cardToImport.oracle_text) {
         const hasRoll = cardToImport.oracle_text.toLowerCase().includes('roll a d20');
         const hasNumberedAbilities = /\d+(?:—\d+)?\s*\|\s*.+/.test(cardToImport.oracle_text);
-        const rollText = parseRollAbilities(cardToImport.oracle_text);
+        const rollText = await parseRollAbilities(cardToImport.oracle_text, signal);
+        if (signal.aborted) return;
         if (rollText) {
             // Use the modified text with roll tags for further processing
             var rulesText = rollText.replace(/(?:\((?:.*?)\)|[^"\n]+(?= — ))/g, function (a) {
@@ -6927,11 +6199,13 @@ function changeCardIndex() {
                 .join('\n');
             card.text.rules2.text = combinedText;
         }
-        const abilities = parseSagaAbilities(cardToImport.oracle_text);
+        const sagaData = await parseSagaData(cardToImport.oracle_text, signal);
+        if (signal.aborted) return;
+        const abilities = sagaData.abilities || [];
         for (let i = 0; i < abilities.length; i++) {
             card.text[`ability${i}`].text = abilities[i].ability.replace('(', '{i}(').replace(')', '){/i}');
         }
-        card.text.reminder.text = `{i}${extractSagaReminderText(cardToImport.oracle_text)}{/i}`;
+        card.text.reminder.text = sagaData.reminderText ? `{i}${sagaData.reminderText}{/i}` : '';
         card.saga = {...card.saga, abilities: abilities.map(a => a.steps).concat(Array.from({length: 4 - abilities.length}, () => 0)), count: abilities.length};
         updateAbilityHeights()
     } else if (card.version.toLowerCase().includes('class') && !card.version.includes('classicshifted') && typeof classCanvas !== "undefined") {
@@ -6939,7 +6213,8 @@ function changeCardIndex() {
             // future support classes with flavor text
             card.text.flavor.text = cardToImport.flavor_text || '';
         }
-        const abilities = parseClassAbilities(cardToImport.oracle_text);
+        const abilities = await parseClassAbilities(cardToImport.oracle_text, signal);
+        if (signal.aborted) return;
         for (let i = 0; i < abilities.length; i++) {
             const {cost, ability} = abilities[i];
             if (cost) {
@@ -7382,221 +6657,105 @@ async function sendServerCardToLocal() {
     await window.creatorCardStorage.sendServerCardToLocal();
 }
 
-//TUTORIAL TAB
-function loadTutorialVideo() {
-    var video = document.querySelector('.video > iframe');
-    if (video.src == '') {
-        video.src = 'https://www.youtube-nocookie.com/embed/e4tnOiub41g?rel=0';
-    }
-}
+// Tutorial-tab helpers are defined in creator/shell-helpers.js.
 
 // GUIDELINES
 // drawNewGuidelines/drawProfilePlacementOverlay helpers moved to /js/creator/rendering.js.
 
-//HIGHLIGHT TRANSPARENCIES
-function toggleCardBackgroundColor(highlight) {
-    if (highlight) {
-        previewCanvas.style["background-color"] = "#ff007fff";
-    } else {
-        previewCanvas.style["background-color"] = "#0000";
-    }
-}
+// Transparency-highlight helpers are defined in creator/shell-helpers.js.
 
 //Rounded Corners
 // setRoundedCorners moved to /js/creator/rendering.js.
 
-//Various loaders
-function imageURL(url, destination, otherParams) {
-    var imageurl = url;
-    // If an image URL does not have HTTP in it, assume it's a local file in the repo local_art directory.
-    if (!url.includes('http')) {
-        imageurl = '/local_art/' + url;
-    } else if (params.get('noproxy') != '') {
-        //CORS PROXY LINKS
-        //Previously: https://cors.bridged.cc/
-        imageurl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
-    }
-    destination(imageurl, otherParams);
-}
-
-async function imageLocal(event, destination, otherParams) {
-    var reader = new FileReader();
-    reader.onload = function () {
-        destination(reader.result, otherParams);
-    }
-    reader.onerror = function () {
-        destination('/img/blank.png', otherParams);
-    }
-    await reader.readAsDataURL(event.target.files[0]);
-}
-
-function loadScript(scriptPath) {
-    return new Promise((resolve, reject) => {
-        var script = document.createElement('script');
-        script.setAttribute('type', 'text/javascript');
-        script.onload = resolve;
-        script.onerror = function () {
-            notify('A script failed to load, likely due to an update. Please reload your page. Sorry for the inconvenience.');
-            reject();
-        }
-        script.setAttribute('src', scriptPath);
-        document.querySelectorAll('head')[0].appendChild(script);
-    });
-}
+// Image/script loading helpers are defined in creator/resource-loaders.js.
 
 // Stretchable SVGs
-function stretchSVG(frameObject) {
-    xhr = new XMLHttpRequest();
-    xhr.open('GET', fixUri(frameObject.src), true);
-    xhr.overrideMimeType('image/svg+xml');
-    xhr.onload = function (e) {
-        if (this.readyState == 4 && this.status == 200) {
-            frameObject.image.src = 'data:image/svg+xml;charset=utf-8,' + stretchSVGReal((new XMLSerializer).serializeToString(this.responseXML.documentElement), frameObject);
+// SVG stretch helpers are defined in creator/resource-loaders.js.
+
+async function fetchScryfallCardByID(scryfallID, callback = console.log) {
+    try {
+        const scryfallResponse = await fetch('https://api.scryfall.com/cards/' + scryfallID);
+        if (scryfallResponse.status === 404) {
+            notify(`No card found for Scryfall ID "${scryfallID}".`, 5);
+            return;
         }
-    }
-    xhr.send();
-}
-
-function stretchSVGReal(data, frameObject) {
-    var returnData = data;
-    frameObject.stretch.forEach(stretch => {
-        const change = stretch.change;
-        const targets = stretch.targets;
-        const name = stretch.name;
-        const oldData = returnData.split(name + '" d="')[1].split('" style=')[0];
-        var newData = '';
-        const listData = oldData.split(/(?=[clmz])/gi);
-        for (i = 0; i < listData.length; i++) {
-            const item = listData[i];
-            if (targets.includes(i) || targets.includes(-i)) {
-                let sign = 1;
-                if (i != 0 && targets.includes(-i)) {
-                    sign = -1
-                }
-
-                if (item[0] == 'C' || item[0] == 'c') {
-                    newCoords = [];
-                    item.slice(1).split(' ').forEach(pair => {
-                        coords = pair.split(',');
-                        newCoords.push((scaleWidth(change[0]) * sign + parseFloat(coords[0])) + ',' + (scaleHeight(change[1]) * sign + parseFloat(coords[1])));
-                    });
-                    newData += item[0] + newCoords.join(' ');
-                } else {
-                    const coords = item.slice(1).split(/[, ]/);
-                    newData += item[0] + (scaleWidth(change[0]) * sign + parseFloat(coords[0])) + ',' + (scaleHeight(change[1]) * sign + parseFloat(coords[1]))
-                }
-            } else {
-                newData += item;
-            }
+        if (!scryfallResponse.ok) {
+            logError('Scryfall card fetch by ID failed with status:', scryfallResponse.status);
+            return;
         }
-        returnData = returnData.replace(oldData, newData);
-    });
-    return returnData;
-}
-
-function processScryfallCard(card, responseCards) {
-    if ('card_faces' in card) {
-        card.card_faces.forEach(face => {
-            face.set = card.set;
-            face.rarity = card.rarity;
-            face.collector_number = card.collector_number;
-            face.lang = card.lang;
-            face.layout = card.layout; // Add layout from parent card
-            if (card.lang != 'en' || face.printed_name) {
-                face.oracle_text = face.printed_text || face.oracle_text;
-                face.name = face.printed_name || face.name;
-                face.type_line = face.printed_type_line || face.type_line;
-            }
-            responseCards.push(face);
-            if (!face.image_uris) {
-                face.image_uris = card.image_uris;
-            }
+        const card = await scryfallResponse.json();
+        const normalizeResponse = await fetch('/api/import-normalization/process-scryfall-card', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(card)
         });
-    } else {
-        if (card.lang != 'en' || card.printed_name) {
-            card.oracle_text = card.printed_text || card.oracle_text;
-            card.name = card.printed_name || card.name;
-            card.type_line = card.printed_type_line || card.type_line;
+        if (!normalizeResponse.ok) {
+            logError('Card normalization failed with status:', normalizeResponse.status);
+            return;
         }
-        // Ensure layout is set even for single-faced cards
-        if (!card.layout) {
-            card.layout = 'normal';
-        }
-        responseCards.push(card);
+        callback(await normalizeResponse.json());
+    } catch (err) {
+        logError('Scryfall card fetch by ID failed:', err);
     }
 }
 
-function fetchScryfallCardByID(scryfallID, callback = console.log) {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function () {
-        if (this.readyState == 4 && this.status == 200) {
-            responseCards = [];
-            importedCards = [JSON.parse(this.responseText)];
-            importedCards.forEach(card => {
-                processScryfallCard(card, responseCards);
-            });
-            callback(responseCards);
-        } else if (this.readyState == 4 && this.status == 404 && !unique && cardName != '') {
-            notify(`No card found for "${cardName}" in ${cardLanguageSelect.options[cardLanguageSelect.selectedIndex].text}.`, 5);
-        }
-    }
-    xhttp.open('GET', 'https://api.scryfall.com/cards/' + scryfallID, true);
+async function fetchScryfallCardByCodeNumber(code, number, callback = console.log) {
     try {
-        xhttp.send();
-    } catch {
-        console.log('Scryfall API search failed.')
+        const scryfallResponse = await fetch(`https://api.scryfall.com/cards/${code}/${number}`);
+        if (scryfallResponse.status === 404) {
+            notify(`No card found for ${code} #${number}.`, 5);
+            return;
+        }
+        if (!scryfallResponse.ok) {
+            logError('Scryfall card fetch failed with status:', scryfallResponse.status);
+            return;
+        }
+        const card = await scryfallResponse.json();
+        const normalizeResponse = await fetch('/api/import-normalization/process-scryfall-card', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(card)
+        });
+        if (!normalizeResponse.ok) {
+            logError('Card normalization failed with status:', normalizeResponse.status);
+            return;
+        }
+        callback(await normalizeResponse.json());
+    } catch (err) {
+        logError('Scryfall card fetch failed:', err);
     }
 }
 
-function fetchScryfallCardByCodeNumber(code, number, callback = console.log) {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function () {
-        if (this.readyState == 4 && this.status == 200) {
-            responseCards = [];
-            importedCards = [JSON.parse(this.responseText)];
-            importedCards.forEach(card => {
-                processScryfallCard(card, responseCards);
-            });
-            callback(responseCards);
-        } else if (this.readyState == 4 && this.status == 404 && !unique && cardName != '') {
-            notify('No card found for ' + code + ' #' + number, 5);
-        }
-    }
-    xhttp.open('GET', 'https://api.scryfall.com/cards/' + code + '/' + number, true);
-    try {
-        xhttp.send();
-    } catch {
-        console.log('Scryfall API search failed.')
-    }
-}
-
-//SCRYFALL STUFF MAY BE CHANGED IN THE FUTURE
-function fetchScryfallData(cardName, callback = console.log, unique = '') {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function () {
-        if (this.readyState == 4 && this.status == 200) {
-            responseCards = [];
-            importedCards = JSON.parse(this.responseText).data;
-            importedCards.forEach(card => {
-                processScryfallCard(card, responseCards);
-            });
-            callback(responseCards);
-        } else if (this.readyState == 4 && this.status == 404 && !unique && cardName != '') {
-            notify(`No cards found for "${cardName}" in ${cardLanguageSelect.options[cardLanguageSelect.selectedIndex].text}.`, 5);
-        }
-    }
+async function fetchScryfallData(cardName, callback = console.log, unique = '') {
     cardLanguageSelect = document.querySelector('#import-language');
-    var cardLanguage = `lang%3D${cardLanguageSelect.value}`;
-    var uniqueArt = '';
-    if (unique) {
-        uniqueArt = '&unique=' + unique;
-    }
-    var url = `https://api.scryfall.com/cards/search?order=released&include_extras=true${uniqueArt}&q=name%3D${cardName.replace(/ /g, '_')}%20${cardLanguage}`;
-    xhttp.open('GET', url, true);
+    const cardLanguage = `lang%3D${cardLanguageSelect.value}`;
+    const uniqueArt = unique ? '&unique=' + unique : '';
+    const url = `https://api.scryfall.com/cards/search?order=released&include_extras=true${uniqueArt}&q=name%3D${cardName.replace(/ /g, '_')}%20${cardLanguage}`;
     try {
-        xhttp.send();
-    } catch {
-        console.log('Scryfall API search failed.')
+        const scryfallResponse = await fetch(url);
+        if (scryfallResponse.status === 404) {
+            if (!unique && cardName !== '') {
+                notify(`No cards found for "${cardName}" in ${cardLanguageSelect.options[cardLanguageSelect.selectedIndex].text}.`, 5);
+            }
+            return;
+        }
+        if (!scryfallResponse.ok) {
+            logError('Scryfall search failed with status:', scryfallResponse.status);
+            return;
+        }
+        const importedCards = (await scryfallResponse.json()).data;
+        const normalizeResponse = await fetch('/api/import-normalization/process-scryfall-cards', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(importedCards)
+        });
+        if (!normalizeResponse.ok) {
+            logError('Card normalization failed with status:', normalizeResponse.status);
+            return;
+        }
+        callback(await normalizeResponse.json());
+    } catch (err) {
+        logError('Scryfall API search failed:', err);
     }
 }
 
@@ -7743,227 +6902,28 @@ updateCreatorPreviewInfo();
 // =====================
 // ASSET LIBRARY TAB
 // =====================
-var _assetLibraryKind = 'art';
-var _assetLibraryItems = [];
-var _assetLibrarySelected = new Set();
-
 function switchAssetKind(kind) {
-    _assetLibraryKind = kind;
-    _assetLibrarySelected.clear();
-    document.querySelectorAll('[id^="asset-kind-tab-"]').forEach(tab => tab.classList.remove('selected'));
-    const activeTab = document.querySelector('#asset-kind-tab-' + kind);
-    if (activeTab) {
-        activeTab.classList.add('selected');
-    }
-    loadAssetLibrary();
+    return creatorAssetLibrary.switchAssetKind(kind);
 }
 
 async function loadAssetLibrary() {
-    const gallery = document.querySelector('#asset-gallery');
-    const status = document.querySelector('#asset-library-status');
-    if (!gallery || !status) {
-        return;
-    }
-    _assetLibrarySelected.clear();
-    gallery.innerHTML = '';
-    status.textContent = 'Loading...';
-
-    try {
-        _assetLibraryItems = await creatorAssetLibrary.fetchSources(_assetLibraryKind);
-    } catch (err) {
-        console.error('Asset library load failed:', err);
-        status.textContent = 'Failed to load files.';
-        return;
-    }
-
-    if (_assetLibraryItems.length === 0) {
-        status.textContent = '0 files';
-        const empty = document.createElement('p');
-        empty.className = 'asset-gallery-empty';
-        empty.textContent = 'No uploaded files yet for this type.';
-        gallery.appendChild(empty);
-        return;
-    }
-
-    status.textContent = _assetLibraryItems.length + ' file(s)';
-    _assetLibraryItems.forEach(item => gallery.appendChild(buildAssetGalleryItem(item)));
-}
-
-function buildAssetGalleryItem(item) {
-    const cell = document.createElement('div');
-    cell.className = 'asset-gallery-item';
-    cell.onclick = () => toggleAssetSelection(item.url, cell);
-
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.className = 'asset-check';
-    check.onclick = (e) => {
-        e.stopPropagation();
-        toggleAssetSelection(item.url, cell);
-    };
-    cell.appendChild(check);
-
-    const img = document.createElement('img');
-    img.src = item.url;
-    img.alt = item.name;
-    img.loading = 'lazy';
-    img.onerror = function () {
-        this.style.opacity = '0.3';
-        this.src = '/img/blank.png';
-    };
-    cell.appendChild(img);
-
-    const name = document.createElement('span');
-    name.className = 'asset-name';
-    name.textContent = item.name;
-    cell.appendChild(name);
-
-    return cell;
-}
-
-function toggleAssetSelection(url, cell) {
-    const check = cell.querySelector('.asset-check');
-    if (_assetLibrarySelected.has(url)) {
-        _assetLibrarySelected.delete(url);
-        cell.classList.remove('selected');
-        if (check) {
-            check.checked = false;
-        }
-    } else {
-        _assetLibrarySelected.add(url);
-        cell.classList.add('selected');
-        if (check) {
-            check.checked = true;
-        }
-    }
-    const status = document.querySelector('#asset-library-status');
-    if (status) {
-        status.textContent = _assetLibraryItems.length + ' file(s), ' + _assetLibrarySelected.size + ' selected';
-    }
+    return creatorAssetLibrary.loadAssetLibrary();
 }
 
 function assetLibrarySelectAll() {
-    _assetLibrarySelected.clear();
-    document.querySelectorAll('#asset-gallery .asset-gallery-item').forEach((cell, i) => {
-        const url = _assetLibraryItems[i]?.url;
-        if (url) {
-            _assetLibrarySelected.add(url);
-        }
-        cell.classList.add('selected');
-        const check = cell.querySelector('.asset-check');
-        if (check) {
-            check.checked = true;
-        }
-    });
-    const status = document.querySelector('#asset-library-status');
-    if (status) {
-        status.textContent = _assetLibraryItems.length + ' file(s), ' + _assetLibrarySelected.size + ' selected';
-    }
+    return creatorAssetLibrary.selectAll();
 }
 
 function assetLibraryDeselectAll() {
-    _assetLibrarySelected.clear();
-    document.querySelectorAll('#asset-gallery .asset-gallery-item').forEach(cell => {
-        cell.classList.remove('selected');
-        const check = cell.querySelector('.asset-check');
-        if (check) {
-            check.checked = false;
-        }
-    });
-    const status = document.querySelector('#asset-library-status');
-    if (status) {
-        status.textContent = _assetLibraryItems.length + ' file(s)';
-    }
+    return creatorAssetLibrary.deselectAll();
 }
 
 async function assetLibraryDeleteSelected() {
-    if (_assetLibrarySelected.size === 0) {
-        notify('No files selected.', 3);
-        return;
-    }
-    if (!confirm('Delete ' + _assetLibrarySelected.size + ' selected file(s)? This cannot be undone.')) {
-        return;
-    }
-
-    const urls = [..._assetLibrarySelected];
-    let deleted = 0;
-    let failed = 0;
-    for (const url of urls) {
-        try {
-            const isDeleted = await creatorAssetLibrary.deleteByKind(_assetLibraryKind, url);
-            if (isDeleted) {
-                deleted++;
-            } else {
-                failed++;
-            }
-        } catch (err) {
-            console.error('Delete failed for', url, err);
-            failed++;
-        }
-    }
-
-    notify(deleted + ' file(s) deleted' + (failed > 0 ? ', ' + failed + ' failed.' : '.'), 4);
-    await loadAssetLibrary();
-
-    if (_assetLibraryKind === 'art') {
-        refreshArtLibrarySelect();
-    } else if (_assetLibraryKind === 'frames') {
-        refreshFrameLibrarySelect();
-    } else if (_assetLibraryKind === 'set-symbols') {
-        refreshSetSymbolLibrarySelect();
-    } else if (_assetLibraryKind === 'watermarks') {
-        refreshWatermarkLibrarySelect();
-    }
+    return creatorAssetLibrary.deleteSelected();
 }
 
 async function assetLibraryUpload(filesRaw) {
-    if (!filesRaw || filesRaw.length === 0) {
-        return;
-    }
-    const files = [...filesRaw];
-    const isDuplicate = _assetLibraryKind === 'art';
-    let uploaded = 0;
-    let dupes = 0;
-    let failed = 0;
-
-    for (const file of files) {
-        try {
-            const result = await creatorAssetLibrary.uploadRawToKind(_assetLibraryKind, file, isDuplicate);
-            if (result.status === 'ok') {
-                uploaded++;
-            } else if (result.status === 'duplicate') {
-                dupes++;
-            } else {
-                throw new Error('HTTP ' + result.code);
-            }
-        } catch (err) {
-            console.error('Upload failed:', err);
-            failed++;
-        }
-    }
-
-    const parts = [];
-    if (uploaded > 0) {
-        parts.push(uploaded + ' uploaded');
-    }
-    if (dupes > 0) {
-        parts.push(dupes + ' duplicate(s) skipped');
-    }
-    if (failed > 0) {
-        parts.push(failed + ' failed');
-    }
-    notify(parts.join(', ') + '.', 4);
-    await loadAssetLibrary();
-
-    if (_assetLibraryKind === 'art') {
-        refreshArtLibrarySelect();
-    } else if (_assetLibraryKind === 'frames') {
-        refreshFrameLibrarySelect();
-    } else if (_assetLibraryKind === 'set-symbols') {
-        refreshSetSymbolLibrarySelect();
-    } else if (_assetLibraryKind === 'watermarks') {
-        refreshWatermarkLibrarySelect();
-    }
+    return creatorAssetLibrary.uploadForCurrentKind(filesRaw);
 }
 
 function assetLibraryUploadDrop(filesRaw) {
