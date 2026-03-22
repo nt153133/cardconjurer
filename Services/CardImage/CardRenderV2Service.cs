@@ -11,6 +11,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Processing.Processors.Transforms;
 
 namespace CardConjurer.Services.CardImage;
 
@@ -48,6 +49,10 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
     public async Task<Stream> RenderAsync(CardData card, bool preview, int? maxDimension, CancellationToken cancellationToken = default)
     {
+        //If it has margins, make the size of canvas bigger to accommodate them, but don't actually apply margins to art/frames/text positions since the JS renderer doesn't do that and it would be a pain to maintain consistency otherwise
+        //Then crop out the center of the actual card width and height
+        
+        
         if (card.Width == null || card.Height == null)
         {
             Log.Error("Card dimensions not specified, using defaults.");
@@ -71,6 +76,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         var output = new MemoryStream();
         await canvas.SaveAsPngAsync(output, cancellationToken);
         output.Seek(0, SeekOrigin.Begin);
+        Configuration.Default.MemoryAllocator.ReleaseRetainedResources();
         return output;
     }
 
@@ -103,8 +109,10 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
         var targetWidth = Math.Max(1, (int)Math.Round(art.Width * zoom));
         var targetHeight = Math.Max(1, (int)Math.Round(art.Height * zoom));
+        
+        IResampler resampler = zoom < 1 ? KnownResamplers.MitchellNetravali : KnownResamplers.Spline;
 
-        using var prepared = art.Clone(ctx => ctx.Resize(targetWidth, targetHeight));
+        using var prepared = art.Clone(ctx => ctx.Resize(targetWidth, targetHeight,resampler));
 
         var rotate = (float)(card.ArtRotate ?? 0);
         if (Math.Abs(rotate) > 0.001f)
@@ -148,9 +156,9 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             {
                 continue;
             }
-
+            IResampler resampler = (sourceFrame.Width < width) ? KnownResamplers.CatmullRom : KnownResamplers.Lanczos3;
             using var layer = new Image<Rgba32>(canvas.Width, canvas.Height);
-            using var sizedFrame = sourceFrame.Clone(ctx => ctx.Resize(width, height));
+            using var sizedFrame = sourceFrame.Clone(ctx => ctx.Resize(width, height, resampler));
             layer.Mutate(ctx => ctx.DrawImage(sizedFrame, new Point(x, y), 1f));
 
             if (frame.Masks is { Count: > 0 })
@@ -169,7 +177,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                         continue;
                     }
 
-                    using var sizedMask = sourceMask.Clone(ctx => ctx.Resize(width, height));
+                    using var sizedMask = sourceMask.Clone(ctx => ctx.Resize(width, height, KnownResamplers.Lanczos3));
                     maskLayer.Mutate(ctx => ctx.DrawImage(sizedMask, new Point(x, y), 1f));
                 }
 
@@ -213,7 +221,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
         EnsureFontsLoaded();
 
-        foreach (var textBlock in card.Text.Values)
+        foreach ((var name, var textBlock) in card.Text)
         {
             if (textBlock is null || string.IsNullOrWhiteSpace(textBlock.Text))
             {
@@ -227,6 +235,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             }
 
             var width = ScaleWidth(textBlock.Width ?? 1, canvas.Width);
+
             var height = ScaleHeight(textBlock.Height ?? 1, canvas.Height);
             if (width <= 1 || height <= 1)
             {
@@ -236,7 +245,17 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             var x = ScaleX(textBlock.X ?? 0, canvas.Width, card.MarginX ?? 0);
             var y = ScaleY(textBlock.Y ?? 0, canvas.Height, card.MarginY ?? 0);
 
-            var fontSize = ResolveFontSize(textBlock, canvas.Width);
+            float fontSize;
+
+            //Temporarily special-case rules text to use width-based font sizing, in reality symbols need to be placed and the text resized depending on the length
+            if (name.Equals("rules", StringComparison.OrdinalIgnoreCase))
+            {
+                fontSize = ResolveFontSize(textBlock, canvas.Width);
+            }
+            else
+            {
+                fontSize = ResolveFontSize(textBlock, canvas.Height);
+            }
             var requestedFont = string.IsNullOrWhiteSpace(textBlock.Font)
                 ? DefaultTextFontFamily
                 : textBlock.Font;
@@ -254,10 +273,24 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 Origin = new PointF(0, 0),
                 WrappingLength = width,
                 HorizontalAlignment = alignment,
-                VerticalAlignment = VerticalAlignment.Top
+                VerticalAlignment = VerticalAlignment.Top,
+                
             };
+            
+            var textSize = TextMeasurer.MeasureSize(text, options);
 
-            var finalText = textBlock.OneLine == true ? text.Replace("\n", " ") : text;
+
+            string finalText;
+            if (textBlock.OneLine == true)
+            {
+                finalText = text.Replace("\n", " ");
+                options.Origin = new PointF(0, textSize.Height / 2);
+            }
+            else
+            {
+                finalText = text.Replace("{lns}", "\n");
+            }
+
             textLayer.Mutate(ctx => ctx.DrawText(options, finalText, color));
             canvas.Mutate(ctx => ctx.DrawImage(textLayer, new Point(x, y), 1f));
         }
@@ -600,7 +633,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
         var width = Math.Max(1, (int)Math.Round(canvas.Width * scale));
         var height = Math.Max(1, (int)Math.Round(canvas.Height * scale));
-        canvas.Mutate(ctx => ctx.Resize(width, height));
+        canvas.Mutate(ctx => ctx.Resize(width, height, KnownResamplers.Lanczos8));
     }
 
     private static Color ParseColor(string? value, Color fallback)

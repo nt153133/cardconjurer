@@ -214,7 +214,7 @@ public static class BleedAdder
         {
             Size = targetSize,
             Mode = ResizeMode.Stretch,
-            Sampler = KnownResamplers.Lanczos8
+            Sampler = KnownResamplers.Lanczos3
         };
 
         image.Mutate(x => x.Resize(resizeOptions));
