@@ -773,7 +773,9 @@
 									<h5 class='padding margin-bottom input-description'>Save your current card locally</h5>
 									<button class='input margin-bottom' onclick='saveCard();'>Save Local Card</button>
 									<h5 class='padding margin-bottom input-description'>Load a locally saved card</h5>
-									<select id='load-card-options' class='input margin-bottom' type='text' onchange='loadCard(this.value);' aria-label='Load a locally saved card'></select>
+									<select id='load-card-options' class='input margin-bottom' type='text' onchange='loadCard(this.value);' aria-label='Load a locally saved card'>
+										<option value="">-- Select a saved card --</option>
+									</select>
 									<div class='input-grid margin-bottom'>
 										<button class='input' onclick='sendLocalCardToServer();'>Send Selected Local to Server</button>
 										<button class='input' onclick='sendAllLocalCardsToServer();'>Send All Local to Server</button>

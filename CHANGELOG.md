@@ -5,6 +5,7 @@ All notable product-facing changes should be added here.
 ## Unreleased
 
 ### Added
+- Server-rendering prototype: added standalone `Renderer V2` page (`/renderer-v2`) and `POST /api/render-v2/preview|full` endpoints to test a separate C# image pipeline for frame/art/text rendering from card JSON.
 - Import/Save: added `Download All Images (Print Bleed)` button that bulk-renders all saved cards through the server renderer with `isPrintImage: true` and saves them as a ZIP.
 - Validation workflow in Creator: added a `Validation` tab and local/server validation result sections wired to existing validation logic.
 - Validation bulk-fix actions: added buttons to update invalid local cards or all local saved cards to the currently selected size profile.

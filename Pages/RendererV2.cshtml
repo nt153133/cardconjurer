@@ -1,0 +1,204 @@
+@page
+@model CardConjurer.Pages.RendererV2Model
+@{
+    ViewData["Title"] = "Renderer V2";
+}
+
+<div class="layer readable-background">
+    <h1>Renderer V2 (Server Pipeline Prototype)</h1>
+    <p>
+        This page renders card JSON via the new server-side C# pipeline.
+        It is separate from the existing Creator workflow and currently focuses on frame, art, and text proof-of-functionality.
+    </p>
+
+    <div style="margin-bottom:1rem;">
+        <label for="renderer-v2-json"><strong>Card JSON</strong></label>
+        <textarea id="renderer-v2-json" style="width:100%;min-height:18rem;font-family:Consolas, monospace;" spellcheck="false"></textarea>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+        <label for="renderer-v2-saved-cards">
+            <strong>Load saved card</strong>
+        </label>
+        <select id="renderer-v2-saved-cards" style="flex:1;min-width:200px;max-width:400px;">
+            <option value="">— Select a saved card —</option>
+        </select>
+
+        <label for="renderer-v2-file" class="button">or load .json file</label>
+        <input id="renderer-v2-file" type="file" accept="application/json,.json" style="display:none;" />
+
+        <label for="renderer-v2-max-dimension">Preview max dimension</label>
+        <input id="renderer-v2-max-dimension" type="number" min="256" max="2048" value="900" style="width:7rem;" />
+
+        <button id="renderer-v2-preview" class="button" type="button">Render Preview</button>
+        <button id="renderer-v2-download" class="button" type="button">Render &amp; Download</button>
+    </div>
+
+    <div id="renderer-v2-status" style="margin-bottom:1rem;"></div>
+
+    <div>
+        <img id="renderer-v2-image" alt="Renderer V2 output" style="max-width:100%;border:1px solid #333;background:#1a1a1a;" />
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var jsonInput = document.getElementById('renderer-v2-json');
+    var savedCardsSelect = document.getElementById('renderer-v2-saved-cards');
+    var fileInput = document.getElementById('renderer-v2-file');
+    var maxDimensionInput = document.getElementById('renderer-v2-max-dimension');
+    var previewButton = document.getElementById('renderer-v2-preview');
+    var downloadButton = document.getElementById('renderer-v2-download');
+    var status = document.getElementById('renderer-v2-status');
+    var image = document.getElementById('renderer-v2-image');
+
+    var previewObjectUrl = null;
+
+    function setStatus(message, isError) {
+        status.textContent = message;
+        status.style.color = isError ? '#f66' : '#ddd';
+    }
+
+    function getPayload() {
+        var raw = jsonInput.value.trim();
+        if (!raw) {
+            throw new Error('Card JSON is required.');
+        }
+
+        var parsed = JSON.parse(raw);
+        var maxDimension = parseInt(maxDimensionInput.value, 10);
+        if (!Number.isFinite(maxDimension)) {
+            maxDimension = 900;
+        }
+
+        return {
+            cardJson: parsed,
+            maxDimension: maxDimension
+        };
+    }
+
+    async function postRender(path) {
+        var payload = getPayload();
+        var response = await fetch(path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            var errorText = await response.text();
+            throw new Error(errorText || ('Render failed with status ' + response.status + '.'));
+        }
+
+        return await response.blob();
+    }
+
+    async function loadSavedCards() {
+        try {
+            var response = await fetch('/api/cards');
+            if (!response.ok) {
+                throw new Error('Failed to load saved cards.');
+            }
+
+            var data = await response.json();
+            var cards = data.cards || [];
+
+            savedCardsSelect.innerHTML = '<option value="">— Select a saved card —</option>';
+
+            cards.forEach(function (card) {
+                var option = document.createElement('option');
+                option.value = card.id;
+                option.textContent = card.title || card.id;
+                savedCardsSelect.appendChild(option);
+            });
+
+            if (cards.length > 0) {
+                setStatus('Loaded ' + cards.length + ' saved card(s).', false);
+            }
+        } catch (error) {
+            setStatus('Error loading saved cards: ' + (error.message || String(error)), true);
+        }
+    }
+
+    async function loadSelectedCard() {
+        var cardId = savedCardsSelect.value;
+        if (!cardId) {
+            return;
+        }
+
+        try {
+            setStatus('Loading card...', false);
+            var response = await fetch('/api/cards/' + encodeURIComponent(cardId));
+            if (!response.ok) {
+                throw new Error('Card not found.');
+            }
+
+            var cardData = await response.json();
+            jsonInput.value = JSON.stringify(cardData, null, 2);
+            setStatus('Loaded card: ' + (cardData.title || cardId), false);
+        } catch (error) {
+            setStatus('Error loading card: ' + (error.message || String(error)), true);
+        }
+    }
+
+    fileInput.addEventListener('change', function (event) {
+        var file = event.target.files && event.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function () {
+            jsonInput.value = String(reader.result || '');
+            savedCardsSelect.value = '';
+            setStatus('Loaded JSON from file.', false);
+        };
+        reader.onerror = function () {
+            setStatus('Failed to read JSON file.', true);
+        };
+        reader.readAsText(file);
+    });
+
+    savedCardsSelect.addEventListener('change', loadSelectedCard);
+
+    previewButton.addEventListener('click', async function () {
+        try {
+            setStatus('Rendering preview...', false);
+            var blob = await postRender('/api/render-v2/preview');
+            if (previewObjectUrl) {
+                URL.revokeObjectURL(previewObjectUrl);
+            }
+            previewObjectUrl = URL.createObjectURL(blob);
+            image.src = previewObjectUrl;
+            setStatus('Preview rendered.', false);
+        } catch (error) {
+            setStatus(error.message || String(error), true);
+        }
+    });
+
+    downloadButton.addEventListener('click', async function () {
+        try {
+            setStatus('Rendering full image...', false);
+            var blob = await postRender('/api/render-v2/full');
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = 'renderer-v2.png';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            setStatus('Full image rendered and download started.', false);
+        } catch (error) {
+            setStatus(error.message || String(error), true);
+        }
+    });
+
+    loadSavedCards();
+})();
+</script>
+}
+
+
+

@@ -3887,7 +3887,9 @@ function importCard(cardObject) {
             }
             var title = `${name} `;
             if (document.querySelector('#importAllPrints').checked) {
-                title += `(${card.set.toUpperCase()} #${card.collector_number})`;
+                const setCode = (card.set || '').toUpperCase();
+                const collectorNumber = card.collector_number || '';
+                title += `(${setCode} #${collectorNumber})`;
             } else {
                 title += `(${card.type_line})`
             }
@@ -4090,7 +4092,7 @@ async function changeCardIndex() {
         // Handle set symbol
         if (!document.querySelector('#lockSetSymbolCode').checked) {
             document.querySelector('#set-symbol-code').value = cardToImport.set;
-            document.querySelector('#set-symbol-rarity').value = cardToImport.rarity.slice(0, 1);
+            document.querySelector('#set-symbol-rarity').value = (cardToImport.rarity || '').slice(0, 1);
             if (!document.querySelector('#lockSetSymbolURL').checked) {
                 fetchSetSymbol();
             }
@@ -4189,7 +4191,7 @@ async function changeCardIndex() {
         // Handle set symbol
         if (!document.querySelector('#lockSetSymbolCode').checked) {
             document.querySelector('#set-symbol-code').value = cardToImport.set;
-            document.querySelector('#set-symbol-rarity').value = cardToImport.rarity.slice(0, 1);
+            document.querySelector('#set-symbol-rarity').value = (cardToImport.rarity || '').slice(0, 1);
             if (!document.querySelector('#lockSetSymbolURL').checked) {
                 fetchSetSymbol();
             }
@@ -4460,7 +4462,8 @@ async function changeCardIndex() {
         if (rollText) {
             // Use the modified text with roll tags for further processing
             var rulesText = rollText.replace(/(?:\((?:.*?)\)|[^"\n]+(?= — ))/g, function (a) {
-                if (italicExemptions.includes(a) || (cardToImport.keywords && cardToImport.keywords.indexOf('Spree') != -1 && a.startsWith('+'))) {
+                const hasBoldTag = a.toLowerCase().includes('{bold}') || a.toLowerCase().includes('{/bold}');
+                if (hasBoldTag || italicExemptions.includes(a) || (cardToImport.keywords && cardToImport.keywords.indexOf('Spree') != -1 && a.startsWith('+'))) {
                     return a;
                 }
                 return '{i}' + a + '{/i}';
@@ -4468,7 +4471,8 @@ async function changeCardIndex() {
         } else {
             // Regular processing for non-roll cards
             var rulesText = (cardToImport.oracle_text || '').replace(/(?:\((?:.*?)\)|[^"\n]+(?= — ))/g, function (a) {
-                if (italicExemptions.includes(a) || (cardToImport.keywords && cardToImport.keywords.indexOf('Spree') != -1 && a.startsWith('+'))) {
+                const hasBoldTag = a.toLowerCase().includes('{bold}') || a.toLowerCase().includes('{/bold}');
+                if (hasBoldTag || italicExemptions.includes(a) || (cardToImport.keywords && cardToImport.keywords.indexOf('Spree') != -1 && a.startsWith('+'))) {
                     return a;
                 }
                 return '{i}' + a + '{/i}';
@@ -4564,8 +4568,10 @@ async function changeCardIndex() {
     }
 
     if (card.text.pt) {
+        const hasPower = cardToImport.power !== undefined && cardToImport.power !== null && cardToImport.power !== '';
+        const hasToughness = cardToImport.toughness !== undefined && cardToImport.toughness !== null && cardToImport.toughness !== '';
         if (card.version == 'invocation') {
-            card.text.pt.text = cardToImport.power + '\n' + cardToImport.toughness || '';
+            card.text.pt.text = hasPower && hasToughness ? (cardToImport.power + '\n' + cardToImport.toughness) : '';
         } else if (card.version == 'pokemon') {
             card.text.middleStat.text = '{' + (cardToImport.power || '') + '}';
             card.text.pt.text = '{' + (cardToImport.toughness || '') + '}';
@@ -4574,7 +4580,7 @@ async function changeCardIndex() {
                 card.text.middleStat.text = '';
             }
         } else {
-            card.text.pt.text = cardToImport.power + '/' + cardToImport.toughness || '';
+            card.text.pt.text = hasPower && hasToughness ? (cardToImport.power + '/' + cardToImport.toughness) : '';
         }
     }
     if (card.text.pt && card.text.pt.text == undefined + '/' + undefined) {
@@ -4664,8 +4670,9 @@ async function changeCardIndex() {
     textEdited();
     //collector's info
     if (localStorage.getItem('enableImportCollectorInfo') == 'true') {
+        const rarityFirst = (cardToImport.rarity || '').charAt(0).toUpperCase();
         document.querySelector('#info-number').value = cardToImport.collector_number || "";
-        document.querySelector('#info-rarity').value = (cardToImport.rarity || "")[0].toUpperCase();
+        document.querySelector('#info-rarity').value = rarityFirst;
         document.querySelector('#info-set').value = (cardToImport.set || "").toUpperCase();
         document.querySelector('#info-language').value = (cardToImport.lang || "").toUpperCase();
         var setXhttp = new XMLHttpRequest();
@@ -4705,11 +4712,13 @@ async function changeCardIndex() {
                 }
             }
         }
-        setXhttp.open('GET', "https://api.scryfall.com/sets/" + cardToImport.set, true);
-        try {
-            setXhttp.send();
-        } catch {
-            console.log('Scryfall API search failed.')
+        if (cardToImport.set) {
+            setXhttp.open('GET', "https://api.scryfall.com/sets/" + cardToImport.set, true);
+            try {
+                setXhttp.send();
+            } catch {
+                console.log('Scryfall API search failed.')
+            }
         }
     }
     //art
@@ -4723,7 +4732,7 @@ async function changeCardIndex() {
     if (!document.querySelector('#lockSetSymbolCode').checked) {
         document.querySelector('#set-symbol-code').value = cardToImport.set;
     }
-    document.querySelector('#set-symbol-rarity').value = cardToImport.rarity.slice(0, 1);
+    document.querySelector('#set-symbol-rarity').value = (cardToImport.rarity || '').slice(0, 1);
     if (!document.querySelector('#lockSetSymbolURL').checked) {
         fetchSetSymbol();
     }

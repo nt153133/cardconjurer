@@ -32,6 +32,8 @@ try
     builder.Services.Configure<CardStorageOptions>(builder.Configuration.GetSection("Cards"));
     builder.Services.AddSingleton<ICardStorageService, FileSystemCardStorageService>();
     builder.Services.AddSingleton<ICardImageService, CardImageService>();
+    builder.Services.AddHttpClient();
+    builder.Services.AddSingleton<ICardRenderV2Service, CardRenderV2Service>();
 
     var app = builder.Build();
 
@@ -82,6 +84,7 @@ try
     app.MapAssetEndpoints();
     app.MapCardEndpoints();
     app.MapCardImageEndpoints();
+    app.MapRenderV2Endpoints();
 
     Log.Information("CardConjurer started successfully");
     app.Run();
