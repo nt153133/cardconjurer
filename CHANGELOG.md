@@ -6,6 +6,7 @@ All notable product-facing changes should be added here.
 
 ### Added
 - Renderer V2: wired the "Load saved card" dropdown to `/api/cards` so server-saved cards populate on page load; selecting a card now fetches its full details and loads only the inner `cardJson` into the JSON textarea, ready to be sent to the render preview/download endpoints.
+- `Card_text_analysis.md`: detailed analysis of the JS text rendering pipeline (`writeText()`) covering font sizing, textbox layout, tag processing, mana symbol rendering, auto-size shrink loop, and vertical centering — with ImageSharp replication notes for the server renderer.
 
 ### Fixed
 - Renderer V2 / `CardData`: legacy saved cards that serialize `serialX`, `serialY`, or `serialScale` as empty strings (`""`) now deserialize safely as `null` instead of throwing `JsonException` (while still rejecting non-empty invalid numeric strings).
