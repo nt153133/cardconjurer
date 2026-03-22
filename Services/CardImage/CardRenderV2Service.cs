@@ -5,6 +5,7 @@ using CardConjurer.Models.Assets;
 using CardConjurer.Models.CardImage;
 using CardConjurer.Services.Assets;
 using Microsoft.Extensions.Options;
+using Serilog;
 using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
@@ -17,6 +18,8 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 {
     private const int DefaultWidth = 2010;
     private const int DefaultHeight = 2814;
+    // JS renderer fallback in creator-23.js uses textObject.font || 'mplantin'.
+    private const string DefaultTextFontFamily = "mplantin";
 
     private readonly IWebHostEnvironment _environment;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -45,8 +48,14 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
     public async Task<Stream> RenderAsync(CardData card, bool preview, int? maxDimension, CancellationToken cancellationToken = default)
     {
-        var width = ClampDimension(card.Width ?? DefaultWidth);
-        var height = ClampDimension(card.Height ?? DefaultHeight);
+        if (card.Width == null || card.Height == null)
+        {
+            Log.Error("Card dimensions not specified, using defaults.");
+        }
+        Log.Information("Rendering card. Width: {Width}, Height: {Height}, Preview: {Preview}, MaxDimension: {MaxDimension}", card.Width, card.Height, preview, maxDimension);
+        //I have no idea why it was clamping
+        var width = card.Width ?? DefaultWidth;
+        var height = card.Height ?? DefaultHeight;
 
         using var canvas = new Image<Rgba32>(width, height);
 
@@ -228,8 +237,14 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             var y = ScaleY(textBlock.Y ?? 0, canvas.Height, card.MarginY ?? 0);
 
             var fontSize = ResolveFontSize(textBlock, canvas.Width);
-            var font = ResolveFont(textBlock.Font, fontSize, textBlock.FontStyle);
-            var color = ParseColor(textBlock.Color, Color.White);
+            var requestedFont = string.IsNullOrWhiteSpace(textBlock.Font)
+                ? DefaultTextFontFamily
+                : textBlock.Font;
+            var font = ResolveFont(requestedFont, fontSize, textBlock.FontStyle);
+            Log.Information("Resolved font for text block. Family: {Family}, Size: {Size}", font.Family.Name, font.Size);
+            // Default to black — most card text (title, type, rules) is dark ink on a light/coloured background.
+            // Text blocks that need white explicitly set color:"white" in their definition.
+            var color = ParseColor(textBlock.Color, Color.Black);
 
             using var textLayer = new Image<Rgba32>(width, height);
             var alignment = ResolveAlignment(textBlock.Align);
@@ -302,11 +317,20 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 {
                     try
                     {
+                        Log.Information("Loading font from file: {File}", file);
                         var family = _fontCollection.Add(file);
                         var alias = Path.GetFileNameWithoutExtension(file);
                         if (!string.IsNullOrWhiteSpace(alias) && !_fontFamilies.ContainsKey(alias))
                         {
                             _fontFamilies[alias] = family;
+                        }
+
+                        // Also register a separator-stripped alias so CSS-style names
+                        // like "belerenb" resolve to the file "beleren-b.ttf".
+                        var strippedAlias = StripFontAlias(alias ?? string.Empty);
+                        if (!string.IsNullOrWhiteSpace(strippedAlias) && !_fontFamilies.ContainsKey(strippedAlias))
+                        {
+                            _fontFamilies[strippedAlias] = family;
                         }
 
                         if (!_fontFamilies.ContainsKey(family.Name))
@@ -316,6 +340,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                     }
                     catch
                     {
+                        Log.Error("Failed to load font from file: {File}", file);
                         // Some fonts may fail to load in certain environments; keep processing others.
                     }
                 }
@@ -327,6 +352,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
     private Font ResolveFont(string? familyName, float size, string? style)
     {
+        Log.Information("Resolving font. Family: {Family}, Size: {Size}, Style: {Style}", familyName, size, style);
         var fontStyle = FontStyle.Regular;
         if (!string.IsNullOrWhiteSpace(style))
         {
@@ -344,11 +370,21 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         if (!string.IsNullOrWhiteSpace(familyName))
         {
             var normalized = familyName.Trim('"', '\'', ' ').ToLowerInvariant();
+
+            // Exact match (also catches hyphenated filenames stored as-is).
             if (_fontFamilies.TryGetValue(normalized, out var familyByAlias))
             {
                 return familyByAlias.CreateFont(size, fontStyle);
             }
 
+            // Separator-stripped match: "belerenb" → registered alias from "beleren-b.ttf".
+            var strippedNormalized = StripFontAlias(normalized);
+            if (_fontFamilies.TryGetValue(strippedNormalized, out var familyByStripped))
+            {
+                return familyByStripped.CreateFont(size, fontStyle);
+            }
+
+            // Substring fallback.
             var byContains = _fontFamilies.FirstOrDefault(pair =>
                 pair.Key.Contains(normalized, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(byContains.Key))
@@ -363,6 +399,23 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         }
 
         return SystemFonts.Get("Arial").CreateFont(size, fontStyle);
+    }
+
+    /// <summary>
+    /// Strips hyphens, underscores, and spaces from a font alias so that
+    /// CSS-style names (e.g. "belerenb") match filename-based aliases (e.g. "beleren-b").
+    /// </summary>
+    private static string StripFontAlias(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+        var buf = new char[name.Length];
+        var len = 0;
+        foreach (var c in name)
+        {
+            if (c != '-' && c != '_' && c != ' ')
+                buf[len++] = c;
+        }
+        return new string(buf, 0, len);
     }
 
     private static string NormalizeText(string input)
@@ -554,6 +607,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
     {
         if (string.IsNullOrWhiteSpace(value))
         {
+            Log.Debug("Color not specified, using fallback.");
             return fallback;
         }
 
@@ -601,6 +655,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         }
         catch
         {
+            Log.Error("Failed to parse color value: {Value}, using fallback.", value);
             return fallback;
         }
     }
@@ -704,5 +759,4 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase) ? fullPath : null;
     }
 }
-
 

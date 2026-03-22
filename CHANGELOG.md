@@ -5,6 +5,13 @@ All notable product-facing changes should be added here.
 ## Unreleased
 
 ### Added
+- Renderer V2: wired the "Load saved card" dropdown to `/api/cards` so server-saved cards populate on page load; selecting a card now fetches its full details and loads only the inner `cardJson` into the JSON textarea, ready to be sent to the render preview/download endpoints.
+
+### Fixed
+- Renderer V2 / `CardData`: legacy saved cards that serialize `serialX`, `serialY`, or `serialScale` as empty strings (`""`) now deserialize safely as `null` instead of throwing `JsonException` (while still rejecting non-empty invalid numeric strings).
+- Renderer V2 font lookup: font names like `belerenb` / `belerenbsc` (CSS-style, no separators) now correctly resolve to `beleren-b.ttf` / `beleren-bsc.ttf`. Each font now registers both its raw filename alias and a separator-stripped alias (`-`, `_`, spaces removed) at load time; `ResolveFont` applies the same stripping to the requested name before lookup, preventing the silent fallback to the first loaded system font.
+- Renderer V2 text color: text blocks with no explicit `color` field (title, type, rules, pt in standard card JSON) now default to `Color.Black` instead of `Color.White` — matching real card ink on light/coloured title and rules areas. Blocks that need white continue to work because they explicitly set `"color":"white"`. Also downgraded the associated log from `Error` to `Debug` since a missing color is expected, not exceptional.
+- Renderer V2 / `CardData`: `FromJsonElement` was returning `null` (→ "Invalid cardJson payload.") for real saved cards due to two deserialization mismatches: (1) JS card objects sometimes store numbers as strings (`artRotate:"0"`, `infoYear:"2026"`) — fixed by adding `JsonNumberHandling.AllowReadingFromString`; (2) `bottomInfo` is a keyed object `{midLeft:{...}}` in stored cards, not a JSON array — fixed by changing its type from `List<JsonElement>?` to `JsonElement?`.
 - Server-rendering prototype: added standalone `Renderer V2` page (`/renderer-v2`) and `POST /api/render-v2/preview|full` endpoints to test a separate C# image pipeline for frame/art/text rendering from card JSON.
 - Import/Save: added `Download All Images (Print Bleed)` button that bulk-renders all saved cards through the server renderer with `isPrintImage: true` and saves them as a ZIP.
 - Validation workflow in Creator: added a `Validation` tab and local/server validation result sections wired to existing validation logic.

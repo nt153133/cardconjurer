@@ -101,20 +101,25 @@
                 throw new Error('Failed to load saved cards.');
             }
 
-            var data = await response.json();
-            var cards = data.cards || [];
+            // /api/cards returns a flat array of SavedCardSummary objects
+            var cards = await response.json();
+            if (!Array.isArray(cards)) {
+                cards = [];
+            }
 
             savedCardsSelect.innerHTML = '<option value="">— Select a saved card —</option>';
 
             cards.forEach(function (card) {
                 var option = document.createElement('option');
                 option.value = card.id;
-                option.textContent = card.title || card.id;
+                option.textContent = card.displayName || card.id;
                 savedCardsSelect.appendChild(option);
             });
 
             if (cards.length > 0) {
                 setStatus('Loaded ' + cards.length + ' saved card(s).', false);
+            } else {
+                setStatus('No server-saved cards found. Save a card from the Creator first.', false);
             }
         } catch (error) {
             setStatus('Error loading saved cards: ' + (error.message || String(error)), true);
@@ -134,9 +139,11 @@
                 throw new Error('Card not found.');
             }
 
-            var cardData = await response.json();
-            jsonInput.value = JSON.stringify(cardData, null, 2);
-            setStatus('Loaded card: ' + (cardData.title || cardId), false);
+            // /api/cards/{id} returns SavedCardDetails: { id, displayName, cardJson, ... }
+            // We only want the inner cardJson in the textarea so it can be sent straight to the renderer.
+            var details = await response.json();
+            jsonInput.value = JSON.stringify(details.cardJson, null, 2);
+            setStatus('Loaded card: ' + (details.displayName || cardId), false);
         } catch (error) {
             setStatus('Error loading card: ' + (error.message || String(error)), true);
         }

@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
+using Serilog;
 
 namespace CardConjurer.Models.CardImage;
 
@@ -69,12 +71,18 @@ public sealed class CardData
     // ── Serial number ────────────────────────────────────────────────────
     [JsonPropertyName("serialNumber")] public string? SerialNumber { get; init; }
     [JsonPropertyName("serialTotal")]  public string? SerialTotal  { get; init; }
+    // Legacy creator saves can emit empty strings for serial numeric fields.
+    [JsonConverter(typeof(EmptyStringNullableDoubleConverter))]
     [JsonPropertyName("serialX")]      public double? SerialX      { get; init; }
+    [JsonConverter(typeof(EmptyStringNullableDoubleConverter))]
     [JsonPropertyName("serialY")]      public double? SerialY      { get; init; }
+    [JsonConverter(typeof(EmptyStringNullableDoubleConverter))]
     [JsonPropertyName("serialScale")]  public double? SerialScale  { get; init; }
 
     // ── Bottom info layout ───────────────────────────────────────────────
-    [JsonPropertyName("bottomInfo")]          public List<JsonElement>? BottomInfo         { get; init; }
+    // bottomInfo is a keyed object on the JS side (e.g. {midLeft:{...}}),
+    // so accept it as a raw JsonElement rather than List<JsonElement>.
+    [JsonPropertyName("bottomInfo")]          public JsonElement? BottomInfo              { get; init; }
     [JsonPropertyName("bottomInfoTranslate")] public CardPoint? BottomInfoTranslate       { get; init; }
     [JsonPropertyName("bottomInfoRotate")]    public double? BottomInfoRotate              { get; init; }
     [JsonPropertyName("bottomInfoZoom")]      public double? BottomInfoZoom               { get; init; }
@@ -136,8 +144,10 @@ public sealed class CardData
         {
             return element.Deserialize<CardData>(JsonOptions);
         }
-        catch (JsonException)
+        catch (JsonException e)
         {
+            Log.Error("Error deserializing CardData from JsonElement: {0}", element);
+            Log.Error("Exception: {0}", e);
             return null;
         }
     }
@@ -147,7 +157,54 @@ public sealed class CardData
         PropertyNameCaseInsensitive = true,
         AllowTrailingCommas = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
+        // JS cards sometimes encode numbers as strings (e.g. artRotate:"0", infoYear:"2026").
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
+}
+
+internal sealed class EmptyStringNullableDoubleConverter : JsonConverter<double?>
+{
+    public override double? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            return reader.GetDouble();
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var s = reader.GetString();
+            if (string.IsNullOrWhiteSpace(s))
+            {
+                return null;
+            }
+
+            if (double.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var value))
+            {
+                return value;
+            }
+
+            throw new JsonException($"Could not parse '{s}' as a double.");
+        }
+
+        throw new JsonException($"Unexpected token {reader.TokenType} when parsing nullable double.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, double? value, JsonSerializerOptions options)
+    {
+        if (value.HasValue)
+        {
+            writer.WriteNumberValue(value.Value);
+            return;
+        }
+
+        writer.WriteNullValue();
+    }
 }
 
 /// <summary>A single card text box definition.</summary>
