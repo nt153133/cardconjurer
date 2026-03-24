@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 using VectSharp;
 using VectSharp.Raster.ImageSharp;
 using VectSharp.SVG;
@@ -92,26 +93,34 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
                 return cached.Clone();
             }
 
-            // Step 6: Ensure Tier 1 vector cache has the parsed SVG
-            var page = GetOrLoadPage(symbolKey);
-            if (page is null)
-                return null;
-
-            // Step 7: Rasterize at the requested size
-            var scale = CalculateScale(page, targetSize);
-            if (scale <= 0)
-                return null;
-
+            // Step 6 & 7: Rasterize or Resize based on file type
             Image<Rgba32> rasterized;
-            try
+            var filePath = _symbolIndex[symbolKey];
+
+            if (filePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             {
+                var page = GetOrLoadPage(symbolKey);
+                if (page is null) return null;
+
+                var scale = CalculateScale(page, targetSize);
+                if (scale <= 0) return null;
+
                 rasterized = page.SaveAsImage(scale);
             }
-            catch (Exception ex)
+            else
             {
-                Log.Warning(ex, "Failed to rasterize mana symbol {SymbolKey} at scale {Scale}", symbolKey, scale);
-                return null;
+                // It's a PNG! Load directly from disk.
+                // We don't use Tier 1 caching for raw ImageSharp images to prevent unmanaged memory leaks.
+                // The OS disk cache makes loading tiny PNGs instantaneous anyway.
+                using var rawImage = Image.Load<Rgba32>(filePath);
+    
+                var scale = (double)targetSize / Math.Max(rawImage.Width, rawImage.Height);
+                int newW = Math.Max(1, (int)Math.Round(rawImage.Width * scale));
+                int newH = Math.Max(1, (int)Math.Round(rawImage.Height * scale));
+
+                rasterized = rawImage.Clone(ctx => ctx.Resize(newW, newH, KnownResamplers.Lanczos3));
             }
+
 
             // Step 8: Store in Tier 2 cache with eviction callback to dispose
             var cacheOptions = new MemoryCacheEntryOptions()
@@ -200,6 +209,8 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
             _frameGate.Release();
         }
     }
+    
+    
 
     // ═════════════════════════════════════════════════════════════════════
     //  Private Helpers

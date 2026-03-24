@@ -99,10 +99,13 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         {"thunderman", ("Thunderman", FontStyle.Regular)}
     };
 
+    private readonly ISvgRasterizationService _svgService;
+
     public CardRenderV2Service(
         IWebHostEnvironment environment,
         IHttpClientFactory httpClientFactory,
-        IOptions<AssetStorageOptions> assetStorageOptions)
+        IOptions<AssetStorageOptions> assetStorageOptions,
+        ISvgRasterizationService svgService)
     {
         _environment = environment;
         _httpClientFactory = httpClientFactory;
@@ -111,6 +114,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         _uploadsRoot = FileSystemAssetStorageService.ResolveUploadsRoot(storage.UploadsRoot, environment.ContentRootPath);
         _publicUploadsBasePath = FileSystemAssetStorageService.NormalizePublicBasePath(storage.PublicBasePath);
         _localArtRoot = Path.Combine(environment.ContentRootPath, "wwwroot", "local_art");
+        _svgService = svgService;
     }
 
     public async Task<Stream> RenderAsync(CardData card, bool preview, int? maxDimension, CancellationToken cancellationToken = default)
@@ -132,13 +136,13 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             tempW = (int)Math.Round(width * (1 + 2 * (card.MarginX ?? 0)));
             tempH = (int)Math.Round(height * (1 + 2 * (card.MarginY ?? 0)));
             Log.Information("Rendering card. Width: {Width}, Height: {Height}", tempW, tempH);
-
         }
 
         using var canvas = new Image<Rgba32>(tempW, tempH);
 
         await DrawArtAsync(canvas, card, cancellationToken);
         await DrawFramesAsync(canvas, card, cancellationToken);
+        await DrawSetSymbolAsync(canvas, card, cancellationToken); // <--- NEW
         DrawText(canvas, card);
 
         if (preview)
@@ -222,8 +226,8 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             return;
         }
 
-        var marginX = 0;//card.MarginX ?? 0;
-        var marginY = 0;//card.MarginY ?? 0;
+        var marginX = 0; //card.MarginX ?? 0;
+        var marginY = 0; //card.MarginY ?? 0;
 
         foreach (var frame in card.Frames.AsEnumerable().Reverse())
         {
@@ -864,14 +868,14 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         if (textBlock.Name.Equals("Rules Text", StringComparison.OrdinalIgnoreCase))
         {
             var startingSize = Math.Ceiling((double)(textBlock.Size * card.Height));
-            Log.Information("Rules Text block detected. Starting font size based on card height: {StartingSize} Current {FontSide}",startingSize, fontSize);
+            Log.Information("Rules Text block detected. Starting font size based on card height: {StartingSize} Current {FontSide}", startingSize, fontSize);
             if (fontSize < startingSize)
             {
-                maxLineHeight =(float)Math.Ceiling( fontSize * 0.7f);
+                maxLineHeight = (float)Math.Ceiling(fontSize * 0.7f);
                 Log.Information("Applying 80% line height reduction for Rules Text to prevent excessive gaps. Starting font size: {StartingSize}, Applied line height: {LineHeight}", startingSize, maxLineHeight);
-                
             }
         }
+
         state.AddLineSpacing = maxLineHeight * 0.35f; // Start with 35% extra spacing for tags that affect alignment like {bar}
 
         float widestLineWidth = 0;
@@ -890,8 +894,104 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 switch (token)
                 {
                     case Tokenizer.TagToken tag:
-                        if (tag.Code == "bar")
+                        // 1. First, check if this tag is actually a mana symbol!
+                        // The JS analysis states symbols are drawn at 78% of the font size.
+                        int targetSymbolSize = (int)Math.Round(state.FontSize * 0.78f);
+
+                        // Ask the cache for the image (Remember: This returns a CLONE that we must dispose!)
+                        Image<Rgba32>? symbolImage = _svgService.GetManaSymbol(tag.Code, targetSymbolSize, textBlock.ManaPrefix);
+
+                        if (symbolImage != null)
                         {
+                            // Wrap in a using statement because we own this cloned memory
+                            using (symbolImage)
+                            {
+                                // JS Analysis math: Spacing is 4% of font size + any custom spacing.
+                                // FIX: Calculate raw width directly instead of using ScaleWidth so negative values aren't clamped to 1!
+                                float customSpacing = (float)((textBlock.ManaSpacing ?? 0) * (card.Width ?? DefaultWidth));
+                                float symbolSpacing = (state.FontSize * 0.04f) + customSpacing;
+
+                                float totalWidth = symbolImage.Width + (symbolSpacing * 2);
+
+                                // Check for line wrap
+                                if (state.CurrentX + totalWidth > maxWidth && state.CurrentX > 0)
+                                {
+                                    widestLineWidth = Math.Max(widestLineWidth, state.CurrentX >= 99999 ? 0 : state.CurrentX);
+
+                                    if (!measureOnly && lineLayer != null && textLayer != null)
+                                    {
+                                        CompositeLine(textLayer, lineLayer, state.CurrentY, state.CurrentX >= 99999 ? 0 : state.CurrentX, maxWidth, alignment);
+                                        lineLayer.Mutate(ctx => ctx.Clear(Color.Transparent));
+                                    }
+
+                                    state.CurrentX = state.IndentX;
+                                    state.CurrentY += maxLineHeight;
+                                    maxLineHeight = state.FontSize;
+                                }
+
+                                if (!measureOnly && lineLayer != null)
+                                {
+                                    // JS Analysis math: Y is offset by 34% of font size, then minus half the symbol height to center it
+                                    float symbolY = padding + (state.FontSize * 0.34f) - (symbolImage.Height / 2f);
+                                    float symbolX = state.CurrentX + padding + symbolSpacing;
+
+// --- NEW: DYNAMIC DROP SHADOW DRIVEN BY JSON ---
+// The JSON completely dictates if a shadow exists, what direction it goes, and if it's blurred!
+                                    bool needsShadow = textBlock.ShadowX.HasValue || textBlock.ShadowY.HasValue;
+
+                                    if (needsShadow)
+                                    {
+                                        // Calculate raw offsets directly to preserve negative values (e.g. down-left)
+                                        float shadowOffsetX = (float)((textBlock.ShadowX ?? 0) * (card.Width ?? DefaultWidth));
+                                        float shadowOffsetY = (float)((textBlock.ShadowY ?? 0) * (card.Height ?? DefaultHeight));
+                                        float shadowBlur = (float)((textBlock.ShadowBlur ?? 0) * (card.Width ?? DefaultWidth));
+
+                                        // Gaussian Blur math: The pixels will spread exactly 3x the radius.
+                                        int shadowPad = (int)Math.Ceiling(shadowBlur * 3);
+
+                                        // Create an ephemeral image large enough to hold the spreading blur (if any)
+                                        using var shadowImage = new Image<Rgba32>(symbolImage.Width + (shadowPad * 2), symbolImage.Height + (shadowPad * 2));
+
+                                        shadowImage.Mutate(ctx =>
+                                        {
+                                            // Stamp the symbol into the center of our padded canvas
+                                            ctx.DrawImage(symbolImage, new Point(shadowPad, shadowPad), 1f);
+
+                                            // Turn the symbol pure black and SOLID (1.0f alpha) for a darker, crisper shadow
+                                            var matrix = new ColorMatrix(
+                                                0, 0, 0, 0,
+                                                0, 0, 0, 0,
+                                                0, 0, 0, 0,
+                                                0, 0, 0, 1.0f,
+                                                0, 0, 0, 0
+                                            );
+
+                                            ctx.Filter(matrix);
+
+                                            // Apply the blur only if the JSON defines one!
+                                            if (shadowBlur > 0) ctx.GaussianBlur(shadowBlur);
+                                        });
+
+                                        // Calculate where the shadow should land, factoring in the padding we added to it
+                                        float drawShadowX = symbolX - shadowPad + shadowOffsetX;
+                                        float drawShadowY = symbolY - shadowPad + shadowOffsetY;
+
+                                        // Stamp the shadow first
+                                        lineLayer.Mutate(ctx => ctx.DrawImage(shadowImage, new Point((int)drawShadowX, (int)drawShadowY), 1f));
+                                    }
+
+// Stamp the actual crisp symbol directly on top
+                                    lineLayer.Mutate(ctx => ctx.DrawImage(symbolImage, new Point((int)symbolX, (int)symbolY), 1f));
+                                }
+
+                                // Advance the cursor past the symbol and its spacing
+                                state.CurrentX += totalWidth;
+                            }
+                        }
+                        // 2. If it's NOT a mana symbol, process it as a normal formatting tag (like {bar} or {i})
+                        else if (tag.Code == "bar")
+                        {
+                            // ... [Keep your exact existing {bar} logic here] ...
                             if (state.CurrentX >= maxWidth)
                             {
                                 widestLineWidth = Math.Max(widestLineWidth, state.CurrentX >= 99999 ? 0 : state.CurrentX);
@@ -904,7 +1004,6 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
                                 state.CurrentX = 0;
                                 state.CurrentY += maxLineHeight;
-                                
                             }
 
                             float barWidth = maxWidth * 0.93f;
@@ -967,7 +1066,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                             state.CurrentX = state.IndentX;
                             state.CurrentY += maxLineHeight;
                             maxLineHeight = state.FontSize;
-                            
+
                             state.CurrentY += state.AddLineSpacing; // Add any extra spacing from tags like {bar}
                             state.AddLineSpacing = 0; // Reset it for the next line
 
@@ -999,7 +1098,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             }
 
 
-            return (widestLineWidth, state.CurrentY );
+            return (widestLineWidth, state.CurrentY);
         }
         finally
         {
@@ -1023,8 +1122,8 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             var height = ScaleHeight(textBlock.Height ?? 1, canvas.Height);
             if (width <= 1 || height <= 1) continue;
 
-            var x = ScaleX(textBlock.X ?? 0, canvas.Width,  0);
-            var y = ScaleY(textBlock.Y ?? 0, canvas.Height,  0);
+            var x = ScaleX(textBlock.X ?? 0, canvas.Width, 0);
+            var y = ScaleY(textBlock.Y ?? 0, canvas.Height, 0);
 
             float startingFontSize = ResolveFontSize(textBlock, card.Height.Value);
 
@@ -1067,21 +1166,86 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
             // --- VERTICAL CENTERING ---
             float verticalAdjust = 0f;
-            if (textBlock.NoVerticalCenter != true)
-            {
-                // Reverted to 0.15f, and removed Math.Max(0, ...) so the P/T box can slide UP if needed
-                var f = 0.15f;
 
-                if (name == "rules")
-                {
-                    f = 0.35f;
-                }
-                
-                verticalAdjust = (height - measuredHeight + (currentFontSize * f)) / 2f;
+// Check if this is a standard frame, or a showcase frame that overrides centering
+            bool isStandardFrame = string.IsNullOrEmpty(card.Version) ||
+                                   card.Version.StartsWith("m15", StringComparison.OrdinalIgnoreCase) ||
+                                   card.Version.Equals("standard", StringComparison.OrdinalIgnoreCase);
+
+            bool shouldCenter = textBlock.NoVerticalCenter != true;
+
+// If it's the rules text on a special frame (Oil Slick, Mystical Archive, etc.), force top-align!
+            if (name.Equals("rules", StringComparison.OrdinalIgnoreCase) && !isStandardFrame)
+            {
+                shouldCenter = false;
             }
+
+            if (shouldCenter)
+            {
+                var f = name.Equals("rules", StringComparison.OrdinalIgnoreCase) ? 0.35f : 0.15f;
+                verticalAdjust = Math.Max(0, (height - measuredHeight + (currentFontSize * f)) / 2f);
+            }
+
+// Draw onto the card, shifting left and up to compensate for our protective padding!
+            canvas.Mutate(ctx => ctx.DrawImage(textLayer, new Point(x - padding, y - padding + (int)verticalAdjust), 1f));
 
             // Draw onto the card, shifting left and up to compensate for our protective padding!
             canvas.Mutate(ctx => ctx.DrawImage(textLayer, new Point(x - padding, y - padding + (int)verticalAdjust), 1f));
+        }
+    }
+
+    private async Task DrawSetSymbolAsync(Image<Rgba32> canvas, CardData card, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(card.SetSymbolSource) || card.SetSymbolBounds is null) return;
+
+        var bounds = card.SetSymbolBounds;
+        var targetWidth = ScaleWidth(bounds.Width ?? 0.12, canvas.Width);
+        var targetHeight = ScaleHeight(bounds.Height ?? 0.04, canvas.Height);
+        if (targetWidth <= 0 || targetHeight <= 0) return;
+
+        Image<Rgba32>? setSymbolImage = null;
+
+        // 1. Resolve mixed formats (SVG vs PNG/JPG)
+        if (card.SetSymbolSource.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+        {
+            var localPath = ResolveLocalPath(card.SetSymbolSource);
+            if (localPath != null)
+            {
+                // Vector rasterization directly to the target size!
+                setSymbolImage = await _svgService.RasterizeFrameAsync(localPath, targetWidth, targetHeight);
+            }
+        }
+        else
+        {
+            // Standard PNG/JPG load
+            using var rawImage = await LoadImageAsync(card.SetSymbolSource, cancellationToken);
+            if (rawImage != null)
+            {
+                // Resize the PNG to fit INSIDE the bounds while maintaining aspect ratio
+                setSymbolImage = rawImage.Clone(ctx => ctx.Resize(new ResizeOptions
+                {
+                    Size = new Size(targetWidth, targetHeight),
+                    Mode = ResizeMode.Max,
+                    Sampler = KnownResamplers.Lanczos3
+                }));
+            }
+        }
+
+        if (setSymbolImage == null) return;
+
+        using (setSymbolImage)
+        {
+            // 2. Calculate final placement based on bounds and alignment
+            float x = ScaleX(bounds.X ?? 0, canvas.Width, card.MarginX ?? 0);
+            float y = ScaleY(bounds.Y ?? 0, canvas.Height, card.MarginY ?? 0);
+
+            if (bounds.Horizontal == "center") x -= setSymbolImage.Width / 2f;
+            else if (bounds.Horizontal == "right") x -= setSymbolImage.Width;
+
+            if (bounds.Vertical == "center") y -= setSymbolImage.Height / 2f;
+            else if (bounds.Vertical == "bottom") y -= setSymbolImage.Height;
+
+            canvas.Mutate(ctx => ctx.DrawImage(setSymbolImage, new Point((int)x, (int)y), 1f));
         }
     }
 }
