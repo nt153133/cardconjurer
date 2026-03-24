@@ -1,10 +1,5 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg width="660" height="660" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
-    <g transform="matrix(1,0,0,1,30,30)">
-        <path d="M300,-30C117.868,-30 -30,117.868 -30,300C-30,482.132 117.868,630 300,630C482.132,630 630,482.132 630,300C630,117.868 482.132,-30 300,-30ZM300,0C465.575,0 600,134.425 600,300C600,465.575 465.575,600 300,600C134.425,600 0,465.575 0,300C0,134.425 134.425,0 300,0Z"/>
-    </g>
-    <g transform="matrix(1,0,0,1,30,30)">
-        <path d="M238,70L455,70L454,113C454,113 330,330 328,524L248,524C240,386 395,139 395,139L250,140C208,140 196,169 186,199L145,199L176,63L203,63C213,69 225,70 238,70Z" style="fill-rule:nonzero;"/>
-    </g>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<svg width="660" height="660" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule: evenodd; clip-rule: evenodd; stroke-linejoin: round; stroke-miterlimit: 2;" preserveAspectRatio="xMidYMid meet" zoomAndPan="magnify" contentScriptType="application/ecmascript" contentStyleType="text/css">
+  <path d="M300-30C117.868-30-30 117.868-30 300s147.868 330 330 330 330-147.868 330-330S482.132-30 300-30zm0 30c165.575 0 300 134.425 300 300S465.575 600 300 600 0 465.575 0 300 134.425 0 300 0z" transform="matrix(1,0,0,1,30,30)" />
+  <path d="M238 70h217l-1 43S330 330 328 524h-80c-8-138 147-385 147-385l-145 1c-42 0-54 29-64 59h-41l31-136h27c10 6 22 7 35 7z" style="fill-rule: nonzero;" transform="matrix(1,0,0,1,30,30)" />
 </svg>

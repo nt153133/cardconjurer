@@ -1,13 +1,6 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg width="714" height="714" viewBox="0 0 714 714" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
-    <g transform="matrix(1,0,0,1,57,57)">
-        <circle cx="300" cy="300" r="300" style="fill:rgb(235,232,219);"/>
-    </g>
-    <g transform="matrix(1,0,0,1,57,57)">
-        <path d="M300,-57C102.966,-57 -57,102.966 -57,300C-57,497.034 102.966,657 300,657C497.034,657 657,497.034 657,300C657,102.966 497.034,-57 300,-57ZM300,0C465.575,0 600,134.425 600,300C600,465.575 465.575,600 300,600C134.425,600 0,465.575 0,300C0,134.425 134.425,0 300,0Z" style="fill:rgb(38,36,30);"/>
-    </g>
-    <g transform="matrix(1,0,0,1,57.5,57)">
-        <path d="M238,70L455,70L454,113C454,113 330,330 328,524L248,524C240,386 395,139 395,139L250,140C208,140 196,169 186,199L145,199L176,63L203,63C213,69 225,70 238,70Z" style="fill:rgb(38,36,30);fill-rule:nonzero;"/>
-    </g>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<svg width="714" height="714" viewBox="0 0 714 714" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule: evenodd; clip-rule: evenodd; stroke-linejoin: round; stroke-miterlimit: 2;" preserveAspectRatio="xMidYMid meet" zoomAndPan="magnify" contentScriptType="application/ecmascript" contentStyleType="text/css">
+  <circle cx="300" cy="300" r="300" style="fill: rgb(235, 232, 219);" transform="matrix(1,0,0,1,57,57)" />
+  <path d="M300-57C102.966-57-57 102.966-57 300s159.966 357 357 357 357-159.966 357-357S497.034-57 300-57zm0 57c165.575 0 300 134.425 300 300S465.575 600 300 600 0 465.575 0 300 134.425 0 300 0z" style="fill: rgb(38, 36, 30);" transform="matrix(1,0,0,1,57,57)" />
+  <path d="M238 70h217l-1 43S330 330 328 524h-80c-8-138 147-385 147-385l-145 1c-42 0-54 29-64 59h-41l31-136h27c10 6 22 7 35 7z" style="fill: rgb(38, 36, 30); fill-rule: nonzero;" transform="matrix(1,0,0,1,57.5,57)" />
 </svg>

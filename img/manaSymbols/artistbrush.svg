@@ -1,7 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg width="202" height="118" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
-    <g transform="matrix(0.12,0,0,0.12,-15.42,-5.93942)">
-        <path d="M1808,540C1291.7,127.479 796.397,-194.52 491,301.867C431.3,188.192 323.607,78.229 129,49.495L129,1032.83C323.607,1004.1 431.3,891.808 491,778.133C796.397,1274.52 1291.7,952.521 1808,540ZM519,485C791.163,-91.4 1188.16,198.521 1663,540C1465.36,620.251 1185.95,634.866 1049,540C914.099,446.55 629.146,397.565 519,485Z" style="fill:white;"/>
-    </g>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<svg width="202" height="118" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule: evenodd; clip-rule: evenodd; stroke-linejoin: round; stroke-miterlimit: 2;" preserveAspectRatio="xMidYMid meet" zoomAndPan="magnify" contentScriptType="application/ecmascript" contentStyleType="text/css">
+  <path d="M1808 540C1291.7 127.48 796.397-194.52 491 301.867 431.3 188.192 323.607 78.23 129 49.495v983.335c194.607-28.73 302.3-141.022 362-254.697C796.397 1274.52 1291.7 952.52 1808 540zM519 485c272.163-576.4 669.16-286.48 1144 55-197.64 80.25-477.05 94.866-614 0-134.9-93.45-419.854-142.435-530-55z" style="fill: white;" transform="matrix(0.12,0,0,0.12,-15.42,-5.93942)" />
 </svg>

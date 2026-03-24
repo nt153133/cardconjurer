@@ -1,10 +1,5 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg width="660" height="660" viewBox="0 0 660 660" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
-    <g transform="matrix(1,0,0,1,30,30)">
-        <path d="M300,-30C117.868,-30 -30,117.868 -30,300C-30,482.132 117.868,630 300,630C482.132,630 630,482.132 630,300C630,117.868 482.132,-30 300,-30ZM300,0C465.575,0 600,134.425 600,300C600,465.575 465.575,600 300,600C134.425,600 0,465.575 0,300C0,134.425 134.425,0 300,0Z"/>
-    </g>
-    <g transform="matrix(1,0,0,1,30,30)">
-        <path d="M512,353.5L296,353.5L375.1,297.2C345.7,273.9 311.7,262.2 273.2,262.2C253.9,262.2 240.7,265.9 233.7,273.2C226.6,280.6 223,293.9 223,313.1C223,366.3 250.4,423.1 305.2,483.5L242.9,546.6C170.4,458.4 134.1,379.5 134.1,310.1C134.1,268.5 146.6,235.4 171.7,210.8C196.8,186.2 230.2,173.9 271.7,173.9C322.4,173.9 377.7,193.2 437.6,231.7L484,152.6L512.2,353.4" style="fill:rgb(19,12,14);fill-rule:nonzero;"/>
-    </g>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<svg width="660" height="660" viewBox="0 0 660 660" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule: evenodd; clip-rule: evenodd; stroke-linejoin: round; stroke-miterlimit: 2;" preserveAspectRatio="xMidYMid meet" zoomAndPan="magnify" contentScriptType="application/ecmascript" contentStyleType="text/css">
+  <path d="M300-30C117.868-30-30 117.868-30 300s147.868 330 330 330 330-147.868 330-330S482.132-30 300-30zm0 30c165.575 0 300 134.425 300 300S465.575 600 300 600 0 465.575 0 300 134.425 0 300 0z" transform="matrix(1,0,0,1,30,30)" />
+  <path d="M512 353.5H296l79.1-56.3c-29.4-23.3-63.4-35-101.9-35-19.3 0-32.5 3.7-39.5 11-7.1 7.4-10.7 20.7-10.7 39.9 0 53.2 27.4 110 82.2 170.4l-62.3 63.1c-72.5-88.2-108.8-167.1-108.8-236.5 0-41.6 12.5-74.7 37.6-99.3 25.1-24.6 58.5-36.9 100-36.9 50.7 0 106 19.3 165.9 57.8l46.4-79.1 28.2 200.8" style="fill: rgb(19, 12, 14); fill-rule: nonzero;" transform="matrix(1,0,0,1,30,30)" />
 </svg>
