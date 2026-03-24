@@ -19,7 +19,7 @@ public static class RenderV2Endpoints
             {
                 return Results.BadRequest(new { error = "Missing cardJson payload." });
             }
-
+            
             var cardData = CardData.FromJsonElement(request.CardJson);
             if (cardData is null)
             {

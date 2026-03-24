@@ -14,6 +14,7 @@ public static class CardSizeCatalog
         new List<CardSizeProfile>
         {
             new("MPC300", new Size(744, 1038), new Size(816, 1110), new Size(684, 981), dpi: 300),
+            new("MTG_Web", new Size(744, 1039), new Size(816, 1111), new Size(684, 981), dpi: 300),
             new("MPC800", new Size(1984, 2768), new Size(2176, 2960), new Size(1834, 2622), dpi: 800),
             new("MPC8002", new Size(1984, 2770), new Size(2176, 2960), new Size(1834, 2622), dpi: 800),
             CardSizeProfile.StandardCard(600),

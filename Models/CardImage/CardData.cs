@@ -158,6 +158,7 @@ public sealed class CardData
         AllowTrailingCommas = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         // JS cards sometimes encode numbers as strings (e.g. artRotate:"0", infoYear:"2026").
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 }
@@ -214,6 +215,7 @@ public sealed class CardTextObject
     [JsonPropertyName("name")]       public string? Name       { get; init; }
     [JsonPropertyName("font")]       public string? Font       { get; init; }
     [JsonPropertyName("fontStyle")]  public string? FontStyle  { get; init; }
+    [JsonConverter(typeof(EmptyStringNullableDoubleConverter))]
     [JsonPropertyName("fontSize")]   public double? FontSize   { get; init; }
     [JsonPropertyName("color")]      public string? Color      { get; init; }
     [JsonPropertyName("x")]          public double? X          { get; init; }
@@ -226,6 +228,7 @@ public sealed class CardTextObject
     [JsonPropertyName("manaCost")]   public bool?   ManaCost   { get; init; }
     [JsonPropertyName("allCaps")]    public bool?   AllCaps    { get; init; }
     [JsonPropertyName("bounded")]    public bool?   Bounded    { get; init; }
+    [JsonPropertyName("noVerticalCenter")]  public bool?  NoVerticalCenter  { get; init; }
 }
 
 /// <summary>A frame layer applied to the card.</summary>
