@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Net.Http.Headers;
-using System.Text;
 using CardConjurer.Models.Assets;
 using CardConjurer.Models.CardImage;
 using CardConjurer.Services.Assets;
@@ -11,7 +10,6 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Transforms;
 
 namespace CardConjurer.Services.CardImage;
 
@@ -20,17 +18,6 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
     private const int DefaultWidth = 2010;
     private const int DefaultHeight = 2814;
     private const string DefaultTextFontFamily = "plantin-mt-pro-rg";
-
-    private readonly IWebHostEnvironment _environment;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly string _uploadsRoot;
-    private readonly string _publicUploadsBasePath;
-    private readonly string _localArtRoot;
-
-    private readonly FontCollection _fontCollection = new();
-    private readonly Dictionary<string, FontFamily> _fontFamilies = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object _fontLock = new();
-    private bool _fontsLoaded;
 
     // Place this near the top of CardRenderV2Service, below the constants
     private static readonly Dictionary<string, (string FamilyName, FontStyle BaseStyle)> CssFontMap = new(StringComparer.OrdinalIgnoreCase)
@@ -99,7 +86,18 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         {"thunderman", ("Thunderman", FontStyle.Regular)}
     };
 
+    private readonly IWebHostEnvironment _environment;
+
+    private readonly FontCollection _fontCollection = new();
+    private readonly Dictionary<string, FontFamily> _fontFamilies = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _fontLock = new();
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly string _localArtRoot;
+    private readonly string _publicUploadsBasePath;
+
     private readonly ISvgRasterizationService _svgService;
+    private readonly string _uploadsRoot;
+    private bool _fontsLoaded;
 
     public CardRenderV2Service(
         IWebHostEnvironment environment,
@@ -117,78 +115,17 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         _svgService = svgService;
     }
 
-    public async Task<Stream> RenderAsync(CardData card, bool preview, int? maxDimension, CancellationToken cancellationToken = default)
+    private static int ClampDimension(int value)
     {
-        if (card.Width == null || card.Height == null)
-        {
-            Log.Error("Card dimensions not specified, using defaults.");
-        }
-
-        Log.Information("Rendering card. Width: {Width}, Height: {Height}, Preview: {Preview}, MaxDimension: {MaxDimension}", card.Width, card.Height, preview, maxDimension);
-
-        var width = card.Width ?? DefaultWidth;
-        var height = card.Height ?? DefaultHeight;
-        var tempW = width;
-        var tempH = height;
-        if (card.Margins.HasValue && card.Margins.Value)
-        {
-            Log.Information("Applying margins. MarginX: {MarginX}, MarginY: {MarginY}", card.MarginX, card.MarginY);
-            tempW = (int)Math.Round(width * (1 + 2 * (card.MarginX ?? 0)));
-            tempH = (int)Math.Round(height * (1 + 2 * (card.MarginY ?? 0)));
-            Log.Information("Rendering card. Width: {Width}, Height: {Height}", tempW, tempH);
-        }
-
-        using var canvas = new Image<Rgba32>(tempW, tempH);
-
-        await DrawArtAsync(canvas, card, cancellationToken);
-        await DrawFramesAsync(canvas, card, cancellationToken);
-        await DrawSetSymbolAsync(canvas, card, cancellationToken); // <--- NEW
-        DrawText(canvas, card);
-
-        if (preview)
-        {
-            ResizePreview(canvas, maxDimension ?? 900);
-        }
-
-        /*
-        if (card.Margins.HasValue && card.Margins.Value)
-        {
-            //Crop Canvas to card.width x card.height from center
-            canvas.Mutate(ctx =>
-            {
-                var cropX = Math.Max(0, (canvas.Width - (card.Width ?? DefaultWidth)) / 2);
-                var cropY = Math.Max(0, (canvas.Height - (card.Height ?? DefaultHeight)) / 2);
-                var cropWidth = Math.Min(canvas.Width, card.Width ?? DefaultWidth);
-                var cropHeight = Math.Min(canvas.Height, card.Height ?? DefaultHeight);
-
-                ctx.Crop(new Rectangle(cropX, cropY, cropWidth, cropHeight));
-            });
-        }
-        */
-
-        var output = new MemoryStream();
-        await canvas.SaveAsPngAsync(output, cancellationToken);
-        output.Seek(0, SeekOrigin.Begin);
-
-        // OPTIMIZATION: Good call keeping this. Releases pooled arrays back to the OS between generations.
-        Configuration.Default.MemoryAllocator.ReleaseRetainedResources();
-        return output;
+        return Math.Clamp(value, 256, 8192);
     }
-
-    private static int ClampDimension(int value) => Math.Clamp(value, 256, 8192);
 
     private async Task DrawArtAsync(Image<Rgba32> canvas, CardData card, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(card.ArtSource))
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(card.ArtSource)) return;
 
         using var art = await LoadImageAsync(card.ArtSource, cancellationToken);
-        if (art is null)
-        {
-            return;
-        }
+        if (art is null) return;
 
         var marginX = card.MarginX ?? 0;
         var marginY = card.MarginY ?? 0;
@@ -197,50 +134,35 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         var y = ScaleY(card.ArtY ?? 0, canvas.Height, marginX);
 
         var zoom = card.ArtZoom ?? 1;
-        if (zoom <= 0)
-        {
-            zoom = 1;
-        }
+        if (zoom <= 0) zoom = 1;
 
         var targetWidth = Math.Max(1, (int)Math.Round(art.Width * zoom));
         var targetHeight = Math.Max(1, (int)Math.Round(art.Height * zoom));
 
         // OPTIMIZATION: Changed downscale to Bicubic to prevent over-sharpening natural artwork brush strokes. Spline kept for upscale.
-        IResampler resampler = zoom < 1 ? KnownResamplers.Bicubic : KnownResamplers.Spline;
+        var resampler = zoom < 1 ? KnownResamplers.Bicubic : KnownResamplers.Spline;
 
         using var prepared = art.Clone(ctx => ctx.Resize(targetWidth, targetHeight, resampler));
 
         var rotate = (float)(card.ArtRotate ?? 0);
-        if (Math.Abs(rotate) > 0.001f)
-        {
-            prepared.Mutate(ctx => ctx.Rotate(rotate));
-        }
+        if (Math.Abs(rotate) > 0.001f) prepared.Mutate(ctx => ctx.Rotate(rotate));
 
         canvas.Mutate(ctx => ctx.DrawImage(prepared, new Point(x, y), 1f));
     }
 
     private async Task DrawFramesAsync(Image<Rgba32> canvas, CardData card, CancellationToken cancellationToken)
     {
-        if (card.Frames is null || card.Frames.Count == 0)
-        {
-            return;
-        }
+        if (card.Frames is null || card.Frames.Count == 0) return;
 
         var marginX = 0; //card.MarginX ?? 0;
         var marginY = 0; //card.MarginY ?? 0;
 
         foreach (var frame in card.Frames.AsEnumerable().Reverse())
         {
-            if (frame is null || string.IsNullOrWhiteSpace(frame.Src))
-            {
-                continue;
-            }
+            if (frame is null || string.IsNullOrWhiteSpace(frame.Src)) continue;
 
             using var sourceFrame = await LoadImageAsync(frame.Src, cancellationToken);
-            if (sourceFrame is null)
-            {
-                continue;
-            }
+            if (sourceFrame is null) continue;
 
             var bounds = frame.Bounds;
             var x = ScaleX(bounds?.X ?? 0, canvas.Width, marginX);
@@ -248,13 +170,10 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             var width = ScaleWidth(bounds?.Width ?? 1, canvas.Width);
             var height = ScaleHeight(bounds?.Height ?? 1, canvas.Height);
 
-            if (width <= 0 || height <= 0)
-            {
-                continue;
-            }
+            if (width <= 0 || height <= 0) continue;
 
             // OPTIMIZATION: Structural resamplers - CatmullRom for sharp upscaling, Lanczos3 for sharp downscaling
-            IResampler resampler = (sourceFrame.Width < width) ? KnownResamplers.CatmullRom : KnownResamplers.Lanczos3;
+            var resampler = sourceFrame.Width < width ? KnownResamplers.CatmullRom : KnownResamplers.Lanczos3;
 
             // OPTIMIZATION: Eliminated full-canvas 'layer'. Working directly on the sized image chunk.
             using var sizedFrame = sourceFrame.Clone(ctx => ctx.Resize(width, height, resampler));
@@ -265,16 +184,10 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 using var combinedMask = new Image<Rgba32>(width, height);
                 foreach (var mask in frame.Masks)
                 {
-                    if (mask is null || string.IsNullOrWhiteSpace(mask.Src))
-                    {
-                        continue;
-                    }
+                    if (mask is null || string.IsNullOrWhiteSpace(mask.Src)) continue;
 
                     using var sourceMask = await LoadImageAsync(mask.Src, cancellationToken);
-                    if (sourceMask is null)
-                    {
-                        continue;
-                    }
+                    if (sourceMask is null) continue;
 
                     // OPTIMIZATION: Reduced from Lanczos8 to Lanczos3 for massive performance gain and less ringing.
                     using var sizedMask = sourceMask.Clone(ctx => ctx.Resize(width, height, KnownResamplers.Lanczos3));
@@ -285,15 +198,9 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             }
 
             // OPTIMIZATION: Overlays and adjustments now process a fraction of the pixels (only the frame bounds)
-            if (frame.ColorOverlayCheck == true && !string.IsNullOrWhiteSpace(frame.ColorOverlay))
-            {
-                ApplyColorOverlay(sizedFrame, ParseColor(frame.ColorOverlay, Color.Transparent));
-            }
+            if (frame.ColorOverlayCheck == true && !string.IsNullOrWhiteSpace(frame.ColorOverlay)) ApplyColorOverlay(sizedFrame, ParseColor(frame.ColorOverlay, Color.Transparent));
 
-            if ((frame.HslHue ?? 0) != 0 || (frame.HslSaturation ?? 0) != 0 || (frame.HslLightness ?? 0) != 0)
-            {
-                ApplyHslAdjustments(sizedFrame, frame.HslHue ?? 0, frame.HslSaturation ?? 0, frame.HslLightness ?? 0);
-            }
+            if ((frame.HslHue ?? 0) != 0 || (frame.HslSaturation ?? 0) != 0 || (frame.HslLightness ?? 0) != 0) ApplyHslAdjustments(sizedFrame, frame.HslHue ?? 0, frame.HslSaturation ?? 0, frame.HslLightness ?? 0);
 
             var opacity = (float)Math.Clamp((frame.Opacity ?? 100) / 100d, 0d, 1d);
 
@@ -327,32 +234,20 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
     private static float ResolveFontSize(CardTextObject text, int cardWidth)
     {
-        if (text.Size is > 0)
-        {
-            return (float)Math.Clamp(Math.Ceiling((float)(text.Size.Value * cardWidth)), 8f, 220f);
-        }
+        if (text.Size is > 0) return (float)Math.Clamp(Math.Ceiling((float)(text.Size.Value * cardWidth)), 8f, 220f);
 
-        if (text.FontSize is > 0)
-        {
-            return Math.Clamp((float)text.FontSize.Value, 8f, 220f);
-        }
+        if (text.FontSize is > 0) return Math.Clamp((float)text.FontSize.Value, 8f, 220f);
 
         return 28f;
     }
 
     private void EnsureFontsLoaded()
     {
-        if (_fontsLoaded)
-        {
-            return;
-        }
+        if (_fontsLoaded) return;
 
         lock (_fontLock)
         {
-            if (_fontsLoaded)
-            {
-                return;
-            }
+            if (_fontsLoaded) return;
 
             var roots = new[]
             {
@@ -361,39 +256,26 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             }.Where(Directory.Exists);
 
             foreach (var root in roots)
-            {
-                foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.TopDirectoryOnly)
-                             .Where(f => f.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)
-                                         || f.EndsWith(".otf", StringComparison.OrdinalIgnoreCase)
-                                         || f.EndsWith(".ttc", StringComparison.OrdinalIgnoreCase)))
+            foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.TopDirectoryOnly)
+                         .Where(f => f.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)
+                                     || f.EndsWith(".otf", StringComparison.OrdinalIgnoreCase)
+                                     || f.EndsWith(".ttc", StringComparison.OrdinalIgnoreCase)))
+                try
                 {
-                    try
-                    {
-                        Log.Information("Loading font from file: {File}", file);
-                        var family = _fontCollection.Add(file);
-                        var alias = Path.GetFileNameWithoutExtension(file);
-                        if (!string.IsNullOrWhiteSpace(alias) && !_fontFamilies.ContainsKey(alias))
-                        {
-                            _fontFamilies[alias] = family;
-                        }
+                    Log.Information("Loading font from file: {File}", file);
+                    var family = _fontCollection.Add(file);
+                    var alias = Path.GetFileNameWithoutExtension(file);
+                    if (!string.IsNullOrWhiteSpace(alias) && !_fontFamilies.ContainsKey(alias)) _fontFamilies[alias] = family;
 
-                        var strippedAlias = StripFontAlias(alias ?? string.Empty);
-                        if (!string.IsNullOrWhiteSpace(strippedAlias) && !_fontFamilies.ContainsKey(strippedAlias))
-                        {
-                            _fontFamilies[strippedAlias] = family;
-                        }
+                    var strippedAlias = StripFontAlias(alias ?? string.Empty);
+                    if (!string.IsNullOrWhiteSpace(strippedAlias) && !_fontFamilies.ContainsKey(strippedAlias)) _fontFamilies[strippedAlias] = family;
 
-                        if (!_fontFamilies.ContainsKey(family.Name))
-                        {
-                            _fontFamilies[family.Name] = family;
-                        }
-                    }
-                    catch
-                    {
-                        Log.Error("Failed to load font from file: {File}", file);
-                    }
+                    if (!_fontFamilies.ContainsKey(family.Name)) _fontFamilies[family.Name] = family;
                 }
-            }
+                catch
+                {
+                    Log.Error("Failed to load font from file: {File}", file);
+                }
 
             _fontsLoaded = true;
         }
@@ -402,8 +284,8 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
     private Font ResolveFont(string requestedCssName, float size, bool isBold = false, bool isItalic = false)
     {
         // Default fallback values
-        string targetFamilyName = "MPlantin";
-        FontStyle targetStyle = FontStyle.Regular;
+        var targetFamilyName = "MPlantin";
+        var targetStyle = FontStyle.Regular;
 
         // 1. Look up the exact CSS string requested by Card Conjurer
         if (!string.IsNullOrWhiteSpace(requestedCssName) && CssFontMap.TryGetValue(requestedCssName.Trim(), out var mapped))
@@ -421,8 +303,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         if (isItalic) targetStyle |= FontStyle.Italic;
 
         // 3. Fetch the specific Family from ImageSharp
-        if (_fontCollection.TryGet(targetFamilyName, out FontFamily family))
-        {
+        if (_fontCollection.TryGet(targetFamilyName, out var family))
             try
             {
                 return family.CreateFont(size, targetStyle);
@@ -434,7 +315,6 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 Log.Warning("Style '{Style}' not found in family '{Family}'. Falling back to Regular.", targetStyle, targetFamilyName);
                 return family.CreateFont(size, FontStyle.Regular);
             }
-        }
 
         // Ultimate fallback if the font file is completely missing from the server
         Log.Error("Font family '{Family}' could not be found in the FontCollection!", targetFamilyName);
@@ -447,10 +327,8 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         var buf = new char[name.Length];
         var len = 0;
         foreach (var c in name)
-        {
             if (c != '-' && c != '_' && c != ' ')
                 buf[len++] = c;
-        }
 
         return new string(buf, 0, len);
     }
@@ -487,7 +365,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
                 for (var x = 0; x < layerRow.Length; x++)
                 {
-                    var alpha = (layerRow[x].A * maskRow[x].A) / 255;
+                    var alpha = layerRow[x].A * maskRow[x].A / 255;
                     layerRow[x].A = (byte)alpha;
                 }
             }
@@ -505,10 +383,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 var row = rows.GetRowSpan(y);
                 for (var x = 0; x < row.Length; x++)
                 {
-                    if (row[x].A == 0)
-                    {
-                        continue;
-                    }
+                    if (row[x].A == 0) continue;
 
                     row[x].R = overlayPixel.R;
                     row[x].G = overlayPixel.G;
@@ -522,10 +397,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
     {
         layer.Mutate(ctx =>
         {
-            if (Math.Abs(hue) > 0.001)
-            {
-                ctx.Hue((float)hue);
-            }
+            if (Math.Abs(hue) > 0.001) ctx.Hue((float)hue);
 
             if (Math.Abs(saturation) > 0.001)
             {
@@ -589,7 +461,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
                     if (layerRow[x].A == 0) continue;
 
-                    var blend = (layerRow[x].A / 255f) * opacity;
+                    var blend = layerRow[x].A / 255f * opacity;
                     canvasRow[canvasX].R = (byte)Math.Clamp(canvasRow[canvasX].R * (1 - blend) + layerRow[x].R * blend, 0, 255);
                     canvasRow[canvasX].G = (byte)Math.Clamp(canvasRow[canvasX].G * (1 - blend) + layerRow[x].G * blend, 0, 255);
                     canvasRow[canvasX].B = (byte)Math.Clamp(canvasRow[canvasX].B * (1 - blend) + layerRow[x].B * blend, 0, 255);
@@ -603,10 +475,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         maxDimension = Math.Clamp(maxDimension, 256, 2048);
 
         var scale = Math.Min((double)maxDimension / canvas.Width, (double)maxDimension / canvas.Height);
-        if (scale >= 1)
-        {
-            return;
-        }
+        if (scale >= 1) return;
 
         var width = Math.Max(1, (int)Math.Round(canvas.Width * scale));
         var height = Math.Max(1, (int)Math.Round(canvas.Height * scale));
@@ -627,19 +496,13 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
         try
         {
-            if (input.StartsWith('#'))
-            {
-                return Color.ParseHex(input);
-            }
+            if (input.StartsWith('#')) return Color.ParseHex(input);
 
             if (input.StartsWith("rgb", StringComparison.OrdinalIgnoreCase))
             {
                 var leftParen = input.IndexOf('(');
                 var rightParen = input.LastIndexOf(')');
-                if (leftParen < 0 || rightParen <= leftParen)
-                {
-                    return fallback;
-                }
+                if (leftParen < 0 || rightParen <= leftParen) return fallback;
 
                 var inner = input[(leftParen + 1)..rightParen];
                 var parts = inner.Split(',').Select(p => p.Trim()).ToArray();
@@ -647,9 +510,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                     byte.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) &&
                     byte.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var g) &&
                     byte.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var b))
-                {
                     return Color.FromRgb(r, g, b);
-                }
             }
 
             return input.ToLowerInvariant() switch
@@ -674,18 +535,12 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
     private async Task<Image<Rgba32>?> LoadImageAsync(string source, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(source))
-        {
-            return null;
-        }
+        if (string.IsNullOrWhiteSpace(source)) return null;
 
         if (source.StartsWith("data:image", StringComparison.OrdinalIgnoreCase))
         {
             var comma = source.IndexOf(',');
-            if (comma < 0)
-            {
-                return null;
-            }
+            if (comma < 0) return null;
 
             try
             {
@@ -719,10 +574,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         }
 
         var localPath = ResolveLocalPath(source);
-        if (localPath is null || !File.Exists(localPath))
-        {
-            return null;
-        }
+        if (localPath is null || !File.Exists(localPath)) return null;
 
         await using var fileStream = File.OpenRead(localPath);
         return await Image.LoadAsync<Rgba32>(fileStream, cancellationToken);
@@ -750,47 +602,19 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             }
         }
 
-        if (!normalized.Contains('/') && !normalized.Contains('\\'))
-        {
-            return EnsureInsideRoot(_localArtRoot, normalized);
-        }
+        if (!normalized.Contains('/') && !normalized.Contains('\\')) return EnsureInsideRoot(_localArtRoot, normalized);
 
         return null;
     }
 
     private static string? EnsureInsideRoot(string root, string relative)
     {
-        if (string.IsNullOrWhiteSpace(root))
-        {
-            return null;
-        }
+        if (string.IsNullOrWhiteSpace(root)) return null;
 
         var fullRoot = Path.GetFullPath(root);
         var fullPath = Path.GetFullPath(Path.Combine(fullRoot, relative));
 
         return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase) ? fullPath : null;
-    }
-
-
-    public class TextRenderState
-    {
-        public float FontSize { get; set; }
-        public string FontFamily { get; set; } = DefaultTextFontFamily;
-        public Color Color { get; set; } = Color.Black;
-        public bool IsItalic { get; set; }
-        public bool IsBold { get; set; }
-        public float CurrentX { get; set; }
-        public float CurrentY { get; set; }
-        public float IndentX { get; set; }
-
-        // NEW: Holds the 35% extra gap until the line wraps
-        public float AddLineSpacing { get; set; }
-
-        public Font GetCurrentFont(CardRenderV2Service service)
-        {
-            //Log.Information("Resolving font. Family: {Family}, Size: {Size}, Bold: {Bold}, Italic: {Italic}", FontFamily, FontSize, IsBold, IsItalic);
-            return service.ResolveFont(FontFamily, FontSize, IsBold, IsItalic);
-        }
     }
 
 
@@ -862,7 +686,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             Color = ParseColor(textBlock.Color, Color.Black)
         };
 
-        float maxLineHeight = (fontSize);
+        var maxLineHeight = fontSize;
 
         Log.Information(textBlock.Name);
         if (textBlock.Name.Equals("Rules Text", StringComparison.OrdinalIgnoreCase))
@@ -882,24 +706,21 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
         Image<Rgba32>? lineLayer = null;
         if (!measureOnly && textLayer != null)
-        {
             // Add padding so ascenders/shadows don't clip horizontally or vertically
-            lineLayer = new Image<Rgba32>(maxWidth + (padding * 2), (int)(fontSize * 3) + padding);
-        }
+            lineLayer = new Image<Rgba32>(maxWidth + padding * 2, (int)(fontSize * 3) + padding);
 
         try
         {
             foreach (var token in tokens)
-            {
                 switch (token)
                 {
                     case Tokenizer.TagToken tag:
                         // 1. First, check if this tag is actually a mana symbol!
                         // The JS analysis states symbols are drawn at 78% of the font size.
-                        int targetSymbolSize = (int)Math.Round(state.FontSize * 0.78f);
+                        var targetSymbolSize = (int)Math.Round(state.FontSize * 0.78f);
 
                         // Ask the cache for the image (Remember: This returns a CLONE that we must dispose!)
-                        Image<Rgba32>? symbolImage = _svgService.GetManaSymbol(tag.Code, targetSymbolSize, textBlock.ManaPrefix);
+                        var symbolImage = _svgService.GetManaSymbol(tag.Code, targetSymbolSize, textBlock.ManaPrefix);
 
                         if (symbolImage != null)
                         {
@@ -908,10 +729,10 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                             {
                                 // JS Analysis math: Spacing is 4% of font size + any custom spacing.
                                 // FIX: Calculate raw width directly instead of using ScaleWidth so negative values aren't clamped to 1!
-                                float customSpacing = (float)((textBlock.ManaSpacing ?? 0) * (card.Width ?? DefaultWidth));
-                                float symbolSpacing = (state.FontSize * 0.04f) + customSpacing;
+                                var customSpacing = (float)((textBlock.ManaSpacing ?? 0) * (card.Width ?? DefaultWidth));
+                                var symbolSpacing = state.FontSize * 0.04f + customSpacing;
 
-                                float totalWidth = symbolImage.Width + (symbolSpacing * 2);
+                                var totalWidth = symbolImage.Width + symbolSpacing * 2;
 
                                 // Check for line wrap
                                 if (state.CurrentX + totalWidth > maxWidth && state.CurrentX > 0)
@@ -932,25 +753,25 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                                 if (!measureOnly && lineLayer != null)
                                 {
                                     // JS Analysis math: Y is offset by 34% of font size, then minus half the symbol height to center it
-                                    float symbolY = padding + (state.FontSize * 0.34f) - (symbolImage.Height / 2f);
-                                    float symbolX = state.CurrentX + padding + symbolSpacing;
+                                    var symbolY = padding + state.FontSize * 0.34f - symbolImage.Height / 2f;
+                                    var symbolX = state.CurrentX + padding + symbolSpacing;
 
-// --- NEW: DYNAMIC DROP SHADOW DRIVEN BY JSON ---
-// The JSON completely dictates if a shadow exists, what direction it goes, and if it's blurred!
-                                    bool needsShadow = textBlock.ShadowX.HasValue || textBlock.ShadowY.HasValue;
+                                    // --- NEW: DYNAMIC DROP SHADOW DRIVEN BY JSON ---
+                                    // The JSON completely dictates if a shadow exists, what direction it goes, and if it's blurred!
+                                    var needsShadow = textBlock.ShadowX.HasValue || textBlock.ShadowY.HasValue;
 
                                     if (needsShadow)
                                     {
                                         // Calculate raw offsets directly to preserve negative values (e.g. down-left)
-                                        float shadowOffsetX = (float)((textBlock.ShadowX ?? 0) * (card.Width ?? DefaultWidth));
-                                        float shadowOffsetY = (float)((textBlock.ShadowY ?? 0) * (card.Height ?? DefaultHeight));
-                                        float shadowBlur = (float)((textBlock.ShadowBlur ?? 0) * (card.Width ?? DefaultWidth));
+                                        var shadowOffsetX = (float)((textBlock.ShadowX ?? 0) * (card.Width ?? DefaultWidth));
+                                        var shadowOffsetY = (float)((textBlock.ShadowY ?? 0) * (card.Height ?? DefaultHeight));
+                                        var shadowBlur = (float)((textBlock.ShadowBlur ?? 0) * (card.Width ?? DefaultWidth));
 
                                         // Gaussian Blur math: The pixels will spread exactly 3x the radius.
-                                        int shadowPad = (int)Math.Ceiling(shadowBlur * 3);
+                                        var shadowPad = (int)Math.Ceiling(shadowBlur * 3);
 
                                         // Create an ephemeral image large enough to hold the spreading blur (if any)
-                                        using var shadowImage = new Image<Rgba32>(symbolImage.Width + (shadowPad * 2), symbolImage.Height + (shadowPad * 2));
+                                        using var shadowImage = new Image<Rgba32>(symbolImage.Width + shadowPad * 2, symbolImage.Height + shadowPad * 2);
 
                                         shadowImage.Mutate(ctx =>
                                         {
@@ -973,14 +794,14 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                                         });
 
                                         // Calculate where the shadow should land, factoring in the padding we added to it
-                                        float drawShadowX = symbolX - shadowPad + shadowOffsetX;
-                                        float drawShadowY = symbolY - shadowPad + shadowOffsetY;
+                                        var drawShadowX = symbolX - shadowPad + shadowOffsetX;
+                                        var drawShadowY = symbolY - shadowPad + shadowOffsetY;
 
                                         // Stamp the shadow first
                                         lineLayer.Mutate(ctx => ctx.DrawImage(shadowImage, new Point((int)drawShadowX, (int)drawShadowY), 1f));
                                     }
 
-// Stamp the actual crisp symbol directly on top
+                                    // Stamp the actual crisp symbol directly on top
                                     lineLayer.Mutate(ctx => ctx.DrawImage(symbolImage, new Point((int)symbolX, (int)symbolY), 1f));
                                 }
 
@@ -1006,15 +827,15 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                                 state.CurrentY += maxLineHeight;
                             }
 
-                            float barWidth = maxWidth * 0.93f;
-                            float barHeight = fontSize * 0.5f;
+                            var barWidth = maxWidth * 0.93f;
+                            var barHeight = fontSize * 0.5f;
 
                             if (!measureOnly && lineLayer != null)
                             {
                                 // Shift the bar down/right by the padding amount
                                 var barRect = new RectangleF(padding + (maxWidth - barWidth) / 2f, padding + barHeight / 2f, barWidth, ScaleHeight(0.002, card.Height ?? DefaultHeight));
 
-                                var colors = new ColorStop[]
+                                var colors = new[]
                                 {
                                     new ColorStop(0f, Color.Transparent),
                                     new ColorStop(0.15f, Color.ParseHex("#606060")),
@@ -1074,25 +895,18 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                             options.Origin = new PointF(state.CurrentX + padding, padding);
                         }
 
-                        if (!measureOnly && lineLayer != null)
-                        {
-                            lineLayer.Mutate(ctx => ctx.DrawText(options, word.Text, state.Color));
-                        }
+                        if (!measureOnly && lineLayer != null) lineLayer.Mutate(ctx => ctx.DrawText(options, word.Text, state.Color));
 
                         state.CurrentX += wordSize.Width;
                         break;
                 }
-            }
 
             if (state.CurrentX > 0)
             {
-                float finalWidth = state.CurrentX >= 99999 ? 0 : state.CurrentX;
+                var finalWidth = state.CurrentX >= 99999 ? 0 : state.CurrentX;
                 widestLineWidth = Math.Max(widestLineWidth, finalWidth);
 
-                if (!measureOnly && lineLayer != null && textLayer != null)
-                {
-                    CompositeLine(textLayer, lineLayer, state.CurrentY, finalWidth, maxWidth, alignment);
-                }
+                if (!measureOnly && lineLayer != null && textLayer != null) CompositeLine(textLayer, lineLayer, state.CurrentY, finalWidth, maxWidth, alignment);
 
                 state.CurrentY += maxLineHeight;
             }
@@ -1111,7 +925,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         if (card.Text is null || card.Text.Count == 0) return;
         EnsureFontsLoaded();
 
-        foreach ((var name, var textBlock) in card.Text)
+        foreach (var (name, textBlock) in card.Text)
         {
             if (textBlock is null || string.IsNullOrWhiteSpace(textBlock.Text)) continue;
 
@@ -1125,13 +939,13 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             var x = ScaleX(textBlock.X ?? 0, canvas.Width, 0);
             var y = ScaleY(textBlock.Y ?? 0, canvas.Height, 0);
 
-            float startingFontSize = ResolveFontSize(textBlock, card.Height.Value);
+            var startingFontSize = ResolveFontSize(textBlock, card.Height.Value);
 
             var alignment = ResolveAlignment(textBlock.Align);
-            bool isOneLine = textBlock.OneLine == true;
-            bool isBounded = textBlock.Bounded ?? true;
+            var isOneLine = textBlock.OneLine == true;
+            var isBounded = textBlock.Bounded ?? true;
 
-            float currentFontSize = startingFontSize;
+            var currentFontSize = startingFontSize;
             float measuredHeight = 0;
             float measuredWidth = 0;
 
@@ -1158,32 +972,29 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             }
 
             // --- FINAL RENDER WITH PADDING HACK ---
-            int padding = (int)(currentFontSize * 0.5f); // Generous padding to protect ascenders
+            var padding = (int)(currentFontSize * 0.5f); // Generous padding to protect ascenders
 
             // Make the image larger to hold the padding
-            using var textLayer = new Image<Rgba32>(width + (padding * 2), height + (padding * 2));
+            using var textLayer = new Image<Rgba32>(width + padding * 2, height + padding * 2);
             MeasureAndDrawTokens(textLayer, tokens, currentFontSize, width, alignment, false, textBlock, card, padding);
 
             // --- VERTICAL CENTERING ---
-            float verticalAdjust = 0f;
+            var verticalAdjust = 0f;
 
 // Check if this is a standard frame, or a showcase frame that overrides centering
-            bool isStandardFrame = string.IsNullOrEmpty(card.Version) ||
-                                   card.Version.StartsWith("m15", StringComparison.OrdinalIgnoreCase) ||
-                                   card.Version.Equals("standard", StringComparison.OrdinalIgnoreCase);
+            var isStandardFrame = string.IsNullOrEmpty(card.Version) ||
+                                  card.Version.StartsWith("m15", StringComparison.OrdinalIgnoreCase) ||
+                                  card.Version.Equals("standard", StringComparison.OrdinalIgnoreCase);
 
-            bool shouldCenter = textBlock.NoVerticalCenter != true;
+            var shouldCenter = textBlock.NoVerticalCenter != true;
 
 // If it's the rules text on a special frame (Oil Slick, Mystical Archive, etc.), force top-align!
-            if (name.Equals("rules", StringComparison.OrdinalIgnoreCase) && !isStandardFrame)
-            {
-                shouldCenter = false;
-            }
+            if (name.Equals("rules", StringComparison.OrdinalIgnoreCase) && !isStandardFrame) shouldCenter = false;
 
             if (shouldCenter)
             {
                 var f = name.Equals("rules", StringComparison.OrdinalIgnoreCase) ? 0.35f : 0.15f;
-                verticalAdjust = Math.Max(0, (height - measuredHeight + (currentFontSize * f)) / 2f);
+                verticalAdjust = Math.Max(0, (height - measuredHeight + currentFontSize * f) / 2f);
             }
 
 // Draw onto the card, shifting left and up to compensate for our protective padding!
@@ -1210,17 +1021,14 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         {
             var localPath = ResolveLocalPath(card.SetSymbolSource);
             if (localPath != null)
-            {
                 // Vector rasterization directly to the target size!
                 setSymbolImage = await _svgService.RasterizeFrameAsync(localPath, targetWidth, targetHeight);
-            }
         }
         else
         {
             // Standard PNG/JPG load
             using var rawImage = await LoadImageAsync(card.SetSymbolSource, cancellationToken);
             if (rawImage != null)
-            {
                 // Resize the PNG to fit INSIDE the bounds while maintaining aspect ratio
                 setSymbolImage = rawImage.Clone(ctx => ctx.Resize(new ResizeOptions
                 {
@@ -1228,7 +1036,6 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                     Mode = ResizeMode.Max,
                     Sampler = KnownResamplers.Lanczos3
                 }));
-            }
         }
 
         if (setSymbolImage == null) return;
@@ -1246,6 +1053,80 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             else if (bounds.Vertical == "bottom") y -= setSymbolImage.Height;
 
             canvas.Mutate(ctx => ctx.DrawImage(setSymbolImage, new Point((int)x, (int)y), 1f));
+        }
+    }
+
+    public async Task<Stream> RenderAsync(CardData card, bool preview, int? maxDimension, CancellationToken cancellationToken = default)
+    {
+        if (card.Width == null || card.Height == null) Log.Error("Card dimensions not specified, using defaults.");
+
+        Log.Information("Rendering card. Width: {Width}, Height: {Height}, Preview: {Preview}, MaxDimension: {MaxDimension}", card.Width, card.Height, preview, maxDimension);
+
+        var width = card.Width ?? DefaultWidth;
+        var height = card.Height ?? DefaultHeight;
+        var tempW = width;
+        var tempH = height;
+        if (card.Margins.HasValue && card.Margins.Value)
+        {
+            Log.Information("Applying margins. MarginX: {MarginX}, MarginY: {MarginY}", card.MarginX, card.MarginY);
+            tempW = (int)Math.Round(width * (1 + 2 * (card.MarginX ?? 0)));
+            tempH = (int)Math.Round(height * (1 + 2 * (card.MarginY ?? 0)));
+            Log.Information("Rendering card. Width: {Width}, Height: {Height}", tempW, tempH);
+        }
+
+        using var canvas = new Image<Rgba32>(tempW, tempH);
+
+        await DrawArtAsync(canvas, card, cancellationToken);
+        await DrawFramesAsync(canvas, card, cancellationToken);
+        await DrawSetSymbolAsync(canvas, card, cancellationToken); // <--- NEW
+        DrawText(canvas, card);
+
+        if (preview) ResizePreview(canvas, maxDimension ?? 900);
+
+        /*
+        if (card.Margins.HasValue && card.Margins.Value)
+        {
+            //Crop Canvas to card.width x card.height from center
+            canvas.Mutate(ctx =>
+            {
+                var cropX = Math.Max(0, (canvas.Width - (card.Width ?? DefaultWidth)) / 2);
+                var cropY = Math.Max(0, (canvas.Height - (card.Height ?? DefaultHeight)) / 2);
+                var cropWidth = Math.Min(canvas.Width, card.Width ?? DefaultWidth);
+                var cropHeight = Math.Min(canvas.Height, card.Height ?? DefaultHeight);
+
+                ctx.Crop(new Rectangle(cropX, cropY, cropWidth, cropHeight));
+            });
+        }
+        */
+
+        var output = new MemoryStream();
+        await canvas.SaveAsPngAsync(output, cancellationToken);
+        output.Seek(0, SeekOrigin.Begin);
+
+        // OPTIMIZATION: Good call keeping this. Releases pooled arrays back to the OS between generations.
+        Configuration.Default.MemoryAllocator.ReleaseRetainedResources();
+        return output;
+    }
+
+
+    public class TextRenderState
+    {
+        public float FontSize { get; set; }
+        public string FontFamily { get; set; } = DefaultTextFontFamily;
+        public Color Color { get; set; } = Color.Black;
+        public bool IsItalic { get; set; }
+        public bool IsBold { get; set; }
+        public float CurrentX { get; set; }
+        public float CurrentY { get; set; }
+        public float IndentX { get; set; }
+
+        // NEW: Holds the 35% extra gap until the line wraps
+        public float AddLineSpacing { get; set; }
+
+        public Font GetCurrentFont(CardRenderV2Service service)
+        {
+            //Log.Information("Resolving font. Family: {Family}, Size: {Size}, Bold: {Bold}, Italic: {Italic}", FontFamily, FontSize, IsBold, IsItalic);
+            return service.ResolveFont(FontFamily, FontSize, IsBold, IsItalic);
         }
     }
 }
