@@ -93,9 +93,15 @@ public sealed class CardData
     [JsonPropertyName("showsFlavorBar")]     public bool? ShowsFlavorBar    { get; init; }
     [JsonPropertyName("margins")]            public bool? Margins           { get; init; }
 
-    // ── Planeswalker ─────────────────────────────────────────────────────
-    [JsonPropertyName("saga")]               public JsonElement? Saga       { get; init; }
-    [JsonPropertyName("class")]              public JsonElement? Class      { get; init; }
+    // ── Version-specific payloads ────────────────────────────────────────
+    // These structures vary by frame/version script. Keep them raw until
+    // Render V2 needs typed access to their inner members.
+    [JsonPropertyName("planeswalker")]       public JsonElement? Planeswalker { get; init; }
+    [JsonPropertyName("dungeon")]            public JsonElement? Dungeon      { get; init; }
+    [JsonPropertyName("qrCode")]             public JsonElement? QrCode       { get; init; }
+    [JsonPropertyName("station")]            public JsonElement? Station      { get; init; }
+    [JsonPropertyName("saga")]               public JsonElement? Saga         { get; init; }
+    [JsonPropertyName("class")]              public JsonElement? Class        { get; init; }
 
     // ── Convenience helpers ──────────────────────────────────────────────
 
@@ -224,10 +230,32 @@ public sealed class CardTextObject
     [JsonPropertyName("height")]     public double? Height     { get; init; }
     [JsonPropertyName("size")]       public double? Size       { get; init; }
     [JsonPropertyName("align")]      public string? Align      { get; init; }
+    [JsonPropertyName("justify")]    public string? Justify    { get; init; }
     [JsonPropertyName("oneLine")]    public bool?   OneLine    { get; init; }
     [JsonPropertyName("manaCost")]   public bool?   ManaCost   { get; init; }
+    [JsonPropertyName("manaPrefix")] public string? ManaPrefix { get; init; }
+    [JsonPropertyName("manaSymbolColor")] public string? ManaSymbolColor { get; init; }
+    [JsonPropertyName("conditionalColor")] public string? ConditionalColor { get; init; }
+    [JsonPropertyName("vertical")]   public bool?   Vertical   { get; init; }
     [JsonPropertyName("allCaps")]    public bool?   AllCaps    { get; init; }
     [JsonPropertyName("bounded")]    public bool?   Bounded    { get; init; }
+    [JsonPropertyName("shadow")]     public string? Shadow     { get; init; }
+    [JsonPropertyName("shadowX")]    public double? ShadowX    { get; init; }
+    [JsonPropertyName("shadowY")]    public double? ShadowY    { get; init; }
+    [JsonPropertyName("shadowBlur")] public double? ShadowBlur { get; init; }
+    [JsonPropertyName("rotation")]   public double? Rotation   { get; init; }
+    [JsonPropertyName("kerning")]    public double? Kerning    { get; init; }
+    [JsonPropertyName("lineSpacing")] public double? LineSpacing { get; init; }
+    [JsonPropertyName("outlineColor")] public string? OutlineColor { get; init; }
+    [JsonPropertyName("outlineWidth")] public double? OutlineWidth { get; init; }
+    [JsonPropertyName("lineCap")]    public string? LineCap    { get; init; }
+    [JsonPropertyName("lineJoin")]   public string? LineJoin   { get; init; }
+    [JsonPropertyName("arcRadius")]  public double? ArcRadius  { get; init; }
+    [JsonPropertyName("arcStart")]   public double? ArcStart   { get; init; }
+    [JsonPropertyName("manaSpacing")] public double? ManaSpacing { get; init; }
+    [JsonPropertyName("manaImageScale")] public double? ManaImageScale { get; init; }
+    [JsonPropertyName("manaPlacement")] public CardTextManaPlacement? ManaPlacement { get; init; }
+    [JsonPropertyName("manaLayout")] public List<CardTextManaLayout>? ManaLayout { get; init; }
     [JsonPropertyName("noVerticalCenter")]  public bool?  NoVerticalCenter  { get; init; }
 }
 
@@ -237,10 +265,15 @@ public sealed class CardFrame
     [JsonPropertyName("name")]    public string? Name    { get; init; }
     [JsonPropertyName("src")]     public string? Src     { get; init; }
     [JsonPropertyName("noThumb")] public bool?   NoThumb { get; init; }
+    [JsonPropertyName("noDefaultMask")] public bool? NoDefaultMask { get; init; }
     [JsonPropertyName("erase")]   public bool?   Erase   { get; init; }
     [JsonPropertyName("opacity")] public double? Opacity { get; init; }
     [JsonPropertyName("masks")]   public List<CardFrameMask>? Masks { get; init; }
     [JsonPropertyName("bounds")]  public CardBounds? Bounds { get; init; }
+    [JsonPropertyName("ogBounds")] public CardBounds? OgBounds { get; init; }
+    [JsonPropertyName("stretch")] public List<CardFrameStretch>? Stretch { get; init; }
+    // complementary can be a number, string, or array depending on the frame pack.
+    [JsonPropertyName("complementary")] public JsonElement? Complementary { get; init; }
     [JsonPropertyName("hslHue")]        public double? HslHue        { get; init; }
     [JsonPropertyName("hslSaturation")] public double? HslSaturation { get; init; }
     [JsonPropertyName("hslLightness")]  public double? HslLightness  { get; init; }
@@ -254,6 +287,31 @@ public sealed class CardFrameMask
 {
     [JsonPropertyName("name")] public string? Name { get; init; }
     [JsonPropertyName("src")]  public string? Src  { get; init; }
+    [JsonPropertyName("preserveAlpha")] public bool? PreserveAlpha { get; init; }
+    [JsonPropertyName("bounds")] public CardBounds? Bounds { get; init; }
+}
+
+/// <summary>Manual mana symbol placement arrays used by vertical/special layouts.</summary>
+public sealed class CardTextManaPlacement
+{
+    [JsonPropertyName("x")] public List<double>? X { get; init; }
+    [JsonPropertyName("y")] public List<double>? Y { get; init; }
+}
+
+/// <summary>One mana-layout breakpoint describing symbol count, scale, and positions.</summary>
+public sealed class CardTextManaLayout
+{
+    [JsonPropertyName("max")] public int? Max { get; init; }
+    [JsonPropertyName("size")] public double? Size { get; init; }
+    [JsonPropertyName("pos")] public List<double[]>? Pos { get; init; }
+}
+
+/// <summary>SVG stretch transform descriptor used by vector frame packs.</summary>
+public sealed class CardFrameStretch
+{
+    [JsonPropertyName("name")] public string? Name { get; init; }
+    [JsonPropertyName("targets")] public List<int>? Targets { get; init; }
+    [JsonPropertyName("change")] public List<double>? Change { get; init; }
 }
 
 /// <summary>Generic x/y/width/height bounds, all normalised 0–1 relative to card size.</summary>

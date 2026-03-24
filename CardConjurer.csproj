@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="DaFoVectSharp.ImageSharpUtils" Version="2.0.1" />
+    <PackageReference Include="DaFoVectSharp.PDF" Version="3.2.1" />
+    <PackageReference Include="DaFoVectSharp.Raster.ImageSharp" Version="2.1.1" />
+    <PackageReference Include="DaFoVectSharp.SVG" Version="1.10.3" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
