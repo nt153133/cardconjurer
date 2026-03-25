@@ -29,5 +29,9 @@ public interface ISvgRasterizationService
     /// <param name="targetHeight">Desired pixel height.</param>
     /// <returns>An Image&lt;Rgba32&gt; the caller must dispose, or null if the file cannot be loaded.</returns>
     Task<Image<Rgba32>?> RasterizeFrameAsync(string absoluteFilePath, int targetWidth, int targetHeight);
+    
+    
+
+    Image<Rgba32>? GetStyledVectorSymbol(string symbolKey, int targetSize, Color backgroundColor, Color foregroundColor);
 }
 

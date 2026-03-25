@@ -677,7 +677,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         bool measureOnly,
         CardTextObject textBlock,
         CardData card,
-        int padding = 0) // <--- NEW: Padding parameter
+        int padding = 0)
     {
         var state = new TextRenderState
         {
@@ -724,89 +724,106 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
                         if (symbolImage != null)
                         {
-                            // Wrap in a using statement because we own this cloned memory
                             using (symbolImage)
                             {
-                                // JS Analysis math: Spacing is 4% of font size + any custom spacing.
-                                // FIX: Calculate raw width directly instead of using ScaleWidth so negative values aren't clamped to 1!
-                                var customSpacing = (float)((textBlock.ManaSpacing ?? 0) * (card.Width ?? DefaultWidth));
-                                var symbolSpacing = state.FontSize * 0.04f + customSpacing;
+// 1. Determine if we need to style this symbol
+                                float outlinePixels = (float)((textBlock.OutlineWidth ?? 0) * (card.Width ?? DefaultWidth));
 
-                                var totalWidth = symbolImage.Width + symbolSpacing * 2;
+// ONLY "outline" prefixed symbols are guaranteed to be monochrome masks.
+// "oilslick" and standard symbols use their native full-color PNGs!
+                                bool isOutlinePrefix = !string.IsNullOrEmpty(textBlock.ManaPrefix) &&
+                                                       textBlock.ManaPrefix.Equals("outline", StringComparison.OrdinalIgnoreCase);
 
-                                // Check for line wrap
-                                if (state.CurrentX + totalWidth > maxWidth && state.CurrentX > 0)
+// These specific tags are pure monochrome vectors that should natively take on the text color.
+                                bool isMonochromeSymbol = new[] {"planeswalker", "chaos", "p", "+1", "e","brush", "bar"}
+                                    .Contains(tag.Code.ToLowerInvariant());
+
+                                bool applyRecolor = isOutlinePrefix || isMonochromeSymbol;
+
+                                Image<Rgba32> drawSymbol = symbolImage;
+                                Image<Rgba32>? styledSymbol = null;
+
+// 2. Apply the correct dynamic styling technique
+                                if (isOutlinePrefix)
                                 {
-                                    widestLineWidth = Math.Max(widestLineWidth, state.CurrentX >= 99999 ? 0 : state.CurrentX);
-
-                                    if (!measureOnly && lineLayer != null && textLayer != null)
-                                    {
-                                        CompositeLine(textLayer, lineLayer, state.CurrentY, state.CurrentX >= 99999 ? 0 : state.CurrentX, maxWidth, alignment);
-                                        lineLayer.Mutate(ctx => ctx.Clear(Color.Transparent));
-                                    }
-
-                                    state.CurrentX = state.IndentX;
-                                    state.CurrentY += maxLineHeight;
-                                    maxLineHeight = state.FontSize;
+                                    // For things like {W}{W} in Divine Gambit - Use the radial outline stamp
+                                    Color outlineColor = ParseColor(textBlock.OutlineColor, Color.Black);
+    
+                                    styledSymbol = StyleManaSymbol(symbolImage, true, state.Color, outlinePixels, outlineColor);
+                                    drawSymbol = styledSymbol;
+                                }
+                                else if (isMonochromeSymbol)
+                                {
+                                    // For things like {+1} and {planeswalker} - Use the Luminosity Fill
+                                    styledSymbol = _svgService.GetStyledVectorSymbol(tag.Code, targetSymbolSize, Color.Black, state.Color);
+                                    drawSymbol = styledSymbol;
                                 }
 
-                                if (!measureOnly && lineLayer != null)
+                                try
                                 {
-                                    // JS Analysis math: Y is offset by 34% of font size, then minus half the symbol height to center it
-                                    var symbolY = padding + state.FontSize * 0.34f - symbolImage.Height / 2f;
-                                    var symbolX = state.CurrentX + padding + symbolSpacing;
+                                    // JS Analysis math: Spacing is 4% of font size + any custom spacing
+                                    float customSpacing = (float)((textBlock.ManaSpacing ?? 0) * (card.Width ?? DefaultWidth));
+                                    float symbolSpacing = (state.FontSize * 0.04f) + customSpacing;
 
-                                    // --- NEW: DYNAMIC DROP SHADOW DRIVEN BY JSON ---
-                                    // The JSON completely dictates if a shadow exists, what direction it goes, and if it's blurred!
-                                    var needsShadow = textBlock.ShadowX.HasValue || textBlock.ShadowY.HasValue;
+                                    float totalWidth = drawSymbol.Width + (symbolSpacing * 2);
 
-                                    if (needsShadow)
+                                    // Check for line wrap
+                                    if (state.CurrentX + totalWidth > maxWidth && state.CurrentX > 0)
                                     {
-                                        // Calculate raw offsets directly to preserve negative values (e.g. down-left)
-                                        var shadowOffsetX = (float)((textBlock.ShadowX ?? 0) * (card.Width ?? DefaultWidth));
-                                        var shadowOffsetY = (float)((textBlock.ShadowY ?? 0) * (card.Height ?? DefaultHeight));
-                                        var shadowBlur = (float)((textBlock.ShadowBlur ?? 0) * (card.Width ?? DefaultWidth));
+                                        widestLineWidth = Math.Max(widestLineWidth, state.CurrentX >= 99999 ? 0 : state.CurrentX);
 
-                                        // Gaussian Blur math: The pixels will spread exactly 3x the radius.
-                                        var shadowPad = (int)Math.Ceiling(shadowBlur * 3);
-
-                                        // Create an ephemeral image large enough to hold the spreading blur (if any)
-                                        using var shadowImage = new Image<Rgba32>(symbolImage.Width + shadowPad * 2, symbolImage.Height + shadowPad * 2);
-
-                                        shadowImage.Mutate(ctx =>
+                                        if (!measureOnly && lineLayer != null && textLayer != null)
                                         {
-                                            // Stamp the symbol into the center of our padded canvas
-                                            ctx.DrawImage(symbolImage, new Point(shadowPad, shadowPad), 1f);
+                                            CompositeLine(textLayer, lineLayer, state.CurrentY, state.CurrentX >= 99999 ? 0 : state.CurrentX, maxWidth, alignment);
+                                            lineLayer.Mutate(ctx => ctx.Clear(Color.Transparent));
+                                        }
 
-                                            // Turn the symbol pure black and SOLID (1.0f alpha) for a darker, crisper shadow
-                                            var matrix = new ColorMatrix(
-                                                0, 0, 0, 0,
-                                                0, 0, 0, 0,
-                                                0, 0, 0, 0,
-                                                0, 0, 0, 1.0f,
-                                                0, 0, 0, 0
-                                            );
-
-                                            ctx.Filter(matrix);
-
-                                            // Apply the blur only if the JSON defines one!
-                                            if (shadowBlur > 0) ctx.GaussianBlur(shadowBlur);
-                                        });
-
-                                        // Calculate where the shadow should land, factoring in the padding we added to it
-                                        var drawShadowX = symbolX - shadowPad + shadowOffsetX;
-                                        var drawShadowY = symbolY - shadowPad + shadowOffsetY;
-
-                                        // Stamp the shadow first
-                                        lineLayer.Mutate(ctx => ctx.DrawImage(shadowImage, new Point((int)drawShadowX, (int)drawShadowY), 1f));
+                                        state.CurrentX = state.IndentX;
+                                        state.CurrentY += maxLineHeight;
+                                        maxLineHeight = state.FontSize;
                                     }
 
-                                    // Stamp the actual crisp symbol directly on top
-                                    lineLayer.Mutate(ctx => ctx.DrawImage(symbolImage, new Point((int)symbolX, (int)symbolY), 1f));
-                                }
+                                    // Draw the symbol
+                                    if (!measureOnly && lineLayer != null)
+                                    {
+                                        // We subtract half the image height, so the extra padding from the outline doesn't ruin the vertical center alignment!
+                                        float symbolY = padding + (state.FontSize * 0.34f) - (drawSymbol.Height / 2f);
+                                        float symbolX = state.CurrentX + padding + symbolSpacing;
 
-                                // Advance the cursor past the symbol and its spacing
-                                state.CurrentX += totalWidth;
+                                        // --- DROP SHADOW BLOCK (Keep your exact existing shadow logic here, just change symbolImage to drawSymbol!) ---
+                                        bool needsShadow = textBlock.ShadowX.HasValue || textBlock.ShadowY.HasValue;
+                                        if (needsShadow)
+                                        {
+                                            float shadowOffsetX = (float)((textBlock.ShadowX ?? 0) * (card.Width ?? DefaultWidth));
+                                            float shadowOffsetY = (float)((textBlock.ShadowY ?? 0) * (card.Height ?? DefaultHeight));
+                                            float shadowBlur = (float)((textBlock.ShadowBlur ?? 0) * (card.Width ?? DefaultWidth));
+                                            int shadowPad = (int)Math.Ceiling(shadowBlur * 3);
+
+                                            using var shadowImage = new Image<Rgba32>(drawSymbol.Width + (shadowPad * 2), drawSymbol.Height + (shadowPad * 2));
+                                            shadowImage.Mutate(ctx =>
+                                            {
+                                                ctx.DrawImage(drawSymbol, new Point(shadowPad, shadowPad), 1f);
+                                                var matrix = new ColorMatrix(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0f, 0, 0, 0, 0);
+                                                ctx.Filter(matrix);
+                                                if (shadowBlur > 0) ctx.GaussianBlur(shadowBlur);
+                                            });
+
+                                            float drawShadowX = symbolX - shadowPad + shadowOffsetX;
+                                            float drawShadowY = symbolY - shadowPad + shadowOffsetY;
+                                            lineLayer.Mutate(ctx => ctx.DrawImage(shadowImage, new Point((int)drawShadowX, (int)drawShadowY), 1f));
+                                        }
+
+                                        // Stamp the final styled symbol
+                                        lineLayer.Mutate(ctx => ctx.DrawImage(drawSymbol, new Point((int)symbolX, (int)symbolY), 1f));
+                                    }
+
+                                    state.CurrentX += totalWidth;
+                                }
+                                finally
+                                {
+                                    // CRITICAL: We must dispose the styled layer once we are done stamping it
+                                    styledSymbol?.Dispose();
+                                }
                             }
                         }
                         // 2. If it's NOT a mana symbol, process it as a normal formatting tag (like {bar} or {i})
@@ -1106,6 +1123,107 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         // OPTIMIZATION: Good call keeping this. Releases pooled arrays back to the OS between generations.
         Configuration.Default.MemoryAllocator.ReleaseRetainedResources();
         return output;
+    }
+    
+    private Image<Rgba32> StyleMonochromeSymbol(Image<Rgba32> rawSymbol, Color fillColor)
+    {
+        var styled = rawSymbol.Clone();
+        var fillPixel = fillColor.ToPixel<Rgba32>();
+
+        styled.ProcessPixelRows(rows => {
+            for (int y = 0; y < rows.Height; y++) {
+                var row = rows.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++) {
+                    var p = row[x];
+                    if (p.A > 0) {
+                        // Calculate pixel brightness (0 = Black, 255 = White)
+                        int brightness = (p.R + p.G + p.B) / 3;
+
+                        // Create a blend ratio. 
+                        // White pixels (1.0) become 100% the text color.
+                        // Black pixels (0.0) stay 100% black.
+                        // Gray anti-aliased edges (0.5) become a perfect 50/50 mix.
+                        float blend = brightness / 255f;
+
+                        row[x].R = (byte)((p.R * (1 - blend)) + (fillPixel.R * blend));
+                        row[x].G = (byte)((p.G * (1 - blend)) + (fillPixel.G * blend));
+                        row[x].B = (byte)((p.B * (1 - blend)) + (fillPixel.B * blend));
+                    }
+                }
+            }
+        });
+
+        return styled;
+    }
+
+    private Image<Rgba32> StyleManaSymbol(Image<Rgba32> rawSymbol, bool applyColor, Color fillColor, float outlineWidth, Color outlineColor)
+    {
+        int padding = (int)Math.Ceiling(outlineWidth);
+        int newW = rawSymbol.Width + (padding * 2);
+        int newH = rawSymbol.Height + (padding * 2);
+
+        var styled = new Image<Rgba32>(newW, newH);
+        var fillPixel = fillColor.ToPixel<Rgba32>();
+        var outlinePixel = outlineColor.ToPixel<Rgba32>();
+
+        // 1. Create the colored versions of the raw symbol
+        using var filledSymbol = rawSymbol.Clone();
+        using var outlineSymbol = rawSymbol.Clone();
+
+        filledSymbol.ProcessPixelRows(rows =>
+        {
+            for (int y = 0; y < rows.Height; y++)
+            {
+                var row = rows.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    if (row[x].A > 0 && applyColor)
+                    {
+                        row[x].R = fillPixel.R;
+                        row[x].G = fillPixel.G;
+                        row[x].B = fillPixel.B;
+                    }
+                }
+            }
+        });
+
+        outlineSymbol.ProcessPixelRows(rows =>
+        {
+            for (int y = 0; y < rows.Height; y++)
+            {
+                var row = rows.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    if (row[x].A > 0)
+                    {
+                        row[x].R = outlinePixel.R;
+                        row[x].G = outlinePixel.G;
+                        row[x].B = outlinePixel.B;
+                    }
+                }
+            }
+        });
+
+        styled.Mutate(ctx =>
+        {
+            // 2. Draw the outline by stamping the outline version in an 8-point circle
+            if (outlineWidth > 0)
+            {
+                int steps = 8;
+                for (int i = 0; i < steps; i++)
+                {
+                    double angle = (Math.PI * 2 * i) / steps;
+                    float ox = padding + (float)(Math.Cos(angle) * outlineWidth);
+                    float oy = padding + (float)(Math.Sin(angle) * outlineWidth);
+                    ctx.DrawImage(outlineSymbol, new Point((int)ox, (int)oy), 1f);
+                }
+            }
+
+            // 3. Draw the main symbol in the dead center
+            ctx.DrawImage(filledSymbol, new Point(padding, padding), 1f);
+        });
+
+        return styled;
     }
 
 

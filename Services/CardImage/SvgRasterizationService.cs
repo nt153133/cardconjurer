@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Xml;
 using Microsoft.Extensions.Caching.Memory;
 using Serilog;
 using SixLabors.ImageSharp;
@@ -113,7 +114,7 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
                 // We don't use Tier 1 caching for raw ImageSharp images to prevent unmanaged memory leaks.
                 // The OS disk cache makes loading tiny PNGs instantaneous anyway.
                 using var rawImage = Image.Load<Rgba32>(filePath);
-    
+
                 var scale = (double)targetSize / Math.Max(rawImage.Width, rawImage.Height);
                 int newW = Math.Max(1, (int)Math.Round(rawImage.Width * scale));
                 int newH = Math.Max(1, (int)Math.Round(rawImage.Height * scale));
@@ -209,13 +210,137 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
             _frameGate.Release();
         }
     }
-    
-    
+
+    public Image<Rgba32>? GetStyledVectorSymbol(string symbolKey, int targetSize, Color backgroundColor, Color foregroundColor)
+    {
+        // 1. Resolve the file path from the index
+        if (!_symbolIndex.TryGetValue(symbolKey, out var filePath))
+        {
+            Log.Error("Symbol key not found in index for styled vector symbol: {SymbolKey}", symbolKey);
+            return null;
+        }
+
+        if (!filePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warning("Attempted to vector-style a non-SVG symbol: {FilePath}", filePath);
+            return null;
+        }
+        string svgContent = File.ReadAllText(filePath);
+        try
+        {
+            // 2. Load the raw SVG text directly from disk (bypassing the Tier 1 cache)
+            
+
+            // 3. Extract ImageSharp Color values
+            var fgPixel = foregroundColor.ToPixel<Rgba32>();
+            var bgPixel = backgroundColor.ToPixel<Rgba32>();
+
+            // 4. Inject CSS to force the foreground color on all vector paths!
+            // We use rgba() so it perfectly respects any alpha transparency passed from ImageSharp
+            Dictionary<string, string> styleValues = new Dictionary<string, string>()
+            {
+                {"fill", $"rgb({fgPixel.R}, {fgPixel.G}, {fgPixel.B})"},
+            };
+
+            svgContent = SetStyle(svgContent, styleValues).TrimStart('?');
+
+            // 5. Parse the manipulated SVG string into a VectSharp Page
+            Page page = Parser.FromString(svgContent);
+
+            // 6. Set the background color natively on the VectSharp Page
+            // This will fill the document bounds behind the vector graphics
+            page.Background = Colour.FromRgba(bgPixel.R, bgPixel.G, bgPixel.B, bgPixel.A);
+
+            // 7. Calculate scale and rasterize directly to ImageSharp
+            double scale = CalculateScale(page, targetSize);
+            if (scale <= 0) return null;
+
+            // No ImageSharp manipulation happens here—it's exported perfectly from the vector engine!
+            return page.SaveAsImage(scale);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to create styled vector symbol for {SymbolKey}", symbolKey);
+            Log.Information(svgContent);
+            return null;
+        }
+    }
+
 
     // ═════════════════════════════════════════════════════════════════════
     //  Private Helpers
     // ═════════════════════════════════════════════════════════════════════
 
+    
+    
+    public static string SetStyle(string xml, Dictionary<string, string> styleProperties)
+    {
+        try
+        {
+            var doc = new XmlDocument();
+            doc.LoadXml(xml);
+            var main = doc.GetElementsByTagName("svg").Cast<XmlElement>().FirstOrDefault();
+            //Get any <text> nodes
+            var done = false;
+
+            //check if main (<svg> node) has style attribute
+            var style = main.GetAttribute("style");
+            
+            var existingProperties = GetStyleProperties(style);
+
+            if (existingProperties.Count != 0)
+            {
+                //replace exsisting if they match
+                foreach (var keyValuePair in styleProperties)
+                {
+                    existingProperties[keyValuePair.Key] = keyValuePair.Value;
+                }
+            }
+            else
+            {
+                existingProperties = styleProperties;
+            }
+            
+            //create new style string
+            var styleString = existingProperties.Select(kv => $"{kv.Key}:{kv.Value}").Aggregate((a, b) => $"{a};{b}");
+            
+            //set the attribute
+            
+            main.SetAttribute("style", styleString);
+            
+            var result = doc.WriteSVGXML()!.TrimStart('\uFEFF');
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error removing changing style from");
+            return xml;
+        }
+    }
+    
+    public static Dictionary<string, string> GetStyleProperties(string attributeString)
+    {
+        if (string.IsNullOrEmpty(attributeString))
+        {
+            return new Dictionary<string, string>();
+        }
+        
+        //break down a string of svg style properties into a dictionary
+        //e.g. "fill:#000000;stroke:none;stroke-width:1px" => { "fill": "#000000", "stroke": "none", "stroke-width": "1px" }
+        var properties = new Dictionary<string, string>();
+        var pairs = attributeString.ToLowerInvariant().Split(';', StringSplitOptions.RemoveEmptyEntries);
+
+        var returnDict = new Dictionary<string, string>();
+        
+        foreach (var pair in pairs)
+        {
+            returnDict.Add(pair.Split(':')[0].Trim(), pair.Split(':')[1].Trim());
+        }
+        
+        return returnDict;
+    }
+    
     /// <summary>
     /// Walks the resolution hierarchy to find a matching symbol key in the file index.
     /// Priority: prefix+tag → prefix+reversed → tag → reversed.
@@ -323,7 +448,7 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
             return index;
         }
 
-        var extensions = new[] { ".svg", ".png" };
+        var extensions = new[] {".svg", ".png"};
 
         foreach (var filePath in Directory.EnumerateFiles(manaRoot, "*.*", SearchOption.AllDirectories))
         {
@@ -383,6 +508,3 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
         // when the IMemoryCache itself is disposed by the DI container.
     }
 }
-
-
-
