@@ -148,7 +148,7 @@ const SERIAL_TEXT_FIELD_HEIGHT = 55;
  * Side length (px, in reference space) of each rounded corner cutout sprite.
  * Scaled proportionally to the current canvas width at draw time.
  */
-const CORNER_CUTOUT_SIZE = 59;
+const CORNER_CUTOUT_SIZE = 59/2010;
 
 // ── Export / Download ─────────────────────────────────────────────────────────
 

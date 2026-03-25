@@ -107,13 +107,13 @@ function drawCard() {
     if (!card.noCorners && (card.marginX == 0 && card.marginY == 0)) {
         var w = card.version == 'battle' ? 2100 : getStandardWidth();
 
-        cardContext.drawImage(corner, 0, 0, scaleWidth(CORNER_CUTOUT_SIZE / w), scaleWidth(CORNER_CUTOUT_SIZE / w));
+        cardContext.drawImage(corner, 0, 0, scaleWidth(CORNER_CUTOUT_SIZE * w), scaleWidth(CORNER_CUTOUT_SIZE * w));
         cardContext.rotate(Math.PI / 2);
-        cardContext.drawImage(corner, 0, -card.width, scaleWidth(CORNER_CUTOUT_SIZE / w), scaleWidth(CORNER_CUTOUT_SIZE / w));
+        cardContext.drawImage(corner, 0, -card.width, scaleWidth(CORNER_CUTOUT_SIZE * w), scaleWidth(CORNER_CUTOUT_SIZE * w));
         cardContext.rotate(Math.PI / 2);
-        cardContext.drawImage(corner, -card.width, -card.height, scaleWidth(CORNER_CUTOUT_SIZE / w), scaleWidth(CORNER_CUTOUT_SIZE / w));
+        cardContext.drawImage(corner, -card.width, -card.height, scaleWidth(CORNER_CUTOUT_SIZE * w), scaleWidth(CORNER_CUTOUT_SIZE * w));
         cardContext.rotate(Math.PI / 2);
-        cardContext.drawImage(corner, -card.height, 0, scaleWidth(CORNER_CUTOUT_SIZE / w), scaleWidth(CORNER_CUTOUT_SIZE / w));
+        cardContext.drawImage(corner, -card.height, 0, scaleWidth(CORNER_CUTOUT_SIZE * w), scaleWidth(CORNER_CUTOUT_SIZE * w));
         cardContext.rotate(Math.PI / 2);
     }
 
