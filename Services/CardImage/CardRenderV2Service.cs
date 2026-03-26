@@ -131,7 +131,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         var marginY = card.MarginY ?? 0;
 
         var x = ScaleX(card.ArtX ?? 0, canvas.Width, marginX);
-        var y = ScaleY(card.ArtY ?? 0, canvas.Height, marginX);
+        var y = ScaleY(card.ArtY ?? 0, canvas.Height, marginY);
 
         var zoom = card.ArtZoom ?? 1;
         if (zoom <= 0) zoom = 1;
@@ -722,7 +722,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                         // Ask the cache for the image (Remember: This returns a CLONE that we must dispose!)
                         var symbolImage = _svgService.GetManaSymbol(tag.Code, targetSymbolSize, textBlock.ManaPrefix);
 
-                        if (symbolImage != null)
+                        if (symbolImage != null && !tag.Code.Equals("bar", StringComparison.OrdinalIgnoreCase)) // {bar} is a special case - it's not a symbol, just a line with extra spacing, so we skip all the styling and drawing logic below for it.
                         {
                             using (symbolImage)
                             {
@@ -731,11 +731,10 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
 // ONLY "outline" prefixed symbols are guaranteed to be monochrome masks.
 // "oilslick" and standard symbols use their native full-color PNGs!
-                                bool isOutlinePrefix = !string.IsNullOrEmpty(textBlock.ManaPrefix) &&
-                                                       textBlock.ManaPrefix.Equals("outline", StringComparison.OrdinalIgnoreCase);
+                                bool isOutlinePrefix = textBlock.OutlineWidth.HasValue;
 
 // These specific tags are pure monochrome vectors that should natively take on the text color.
-                                bool isMonochromeSymbol = new[] {"planeswalker", "chaos", "p", "+1", "e","brush", "bar"}
+                                bool isMonochromeSymbol = new[] {"planeswalker", "chaos", "p", "+1", "e","brush"}
                                     .Contains(tag.Code.ToLowerInvariant());
 
                                 bool applyRecolor = isOutlinePrefix || isMonochromeSymbol;
@@ -744,7 +743,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                                 Image<Rgba32>? styledSymbol = null;
 
 // 2. Apply the correct dynamic styling technique
-                                if (isOutlinePrefix)
+                                if (isOutlinePrefix && !isMonochromeSymbol)
                                 {
                                     // For things like {W}{W} in Divine Gambit - Use the radial outline stamp
                                     Color outlineColor = ParseColor(textBlock.OutlineColor, Color.Black);
@@ -1060,8 +1059,8 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         using (setSymbolImage)
         {
             // 2. Calculate final placement based on bounds and alignment
-            float x = ScaleX(bounds.X ?? 0, canvas.Width, card.MarginX ?? 0);
-            float y = ScaleY(bounds.Y ?? 0, canvas.Height, card.MarginY ?? 0);
+            float x = ScaleX(bounds.X ?? 0, canvas.Width, 0);
+            float y = ScaleY(bounds.Y ?? 0, canvas.Height,  0);
 
             if (bounds.Horizontal == "center") x -= setSymbolImage.Width / 2f;
             else if (bounds.Horizontal == "right") x -= setSymbolImage.Width;
@@ -1220,7 +1219,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             }
 
             // 3. Draw the main symbol in the dead center
-            ctx.DrawImage(filledSymbol, new Point(padding, padding), 1f);
+            ctx.DrawImage(rawSymbol, new Point(padding, padding), 1f);
         });
 
         return styled;

@@ -103,7 +103,12 @@ Text rendering parity note:
 - Import normalization style is regex/string transform oriented; match existing style.
 - **Changelog discipline**: every major feature/behavior change/user-visible fix must add one entry in `CHANGELOG.md` in the same PR/commit.
 - **Changelog format**: 1-2 lines per entry under `## Unreleased` -> `Added` / `Changed` / `Fixed`.
-
+– After ANY correction: update lessons.md
+– Write rules that prevent the same mistake
+– Ruthlessly iterate until mistake rate drops
+– Pause and ask “is there a more elegant way?”
+– Skip this for simple fixes — don’t over-engineer
+- 
 ## Local Workflows
 - Primary run path:
 ```powershell
