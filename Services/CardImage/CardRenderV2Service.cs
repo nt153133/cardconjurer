@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using CardConjurer.Models.Assets;
 using CardConjurer.Models.CardImage;
+using CardConjurer.Models.CardImage.Sizing;
 using CardConjurer.Services.Assets;
 using Microsoft.Extensions.Options;
 using Serilog;
@@ -575,6 +576,28 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         canvas.Mutate(ctx => ctx.Resize(width, height, KnownResamplers.Lanczos3));
     }
 
+    private static CardSizeProfile ResolveOutputProfile(CardData card, string? cardSizeProfileName)
+    {
+        if (CardSizeCatalog.TryGetByName(cardSizeProfileName, out var explicitProfile))
+        {
+            return explicitProfile;
+        }
+
+        var cutW = card.Width ?? DefaultWidth;
+        var cutH = card.Height ?? DefaultHeight;
+        return CardSizeCatalog.GetClosestByCutSize(cutW, cutH);
+    }
+
+    private static void CropToCutSize(Image<Rgba32> image, int cutWidth, int cutHeight)
+    {
+        var cropWidth = Math.Min(image.Width, cutWidth);
+        var cropHeight = Math.Min(image.Height, cutHeight);
+        var cropX = Math.Max(0, (image.Width - cropWidth) / 2);
+        var cropY = Math.Max(0, (image.Height - cropHeight) / 2);
+
+        image.Mutate(ctx => ctx.Crop(new Rectangle(cropX, cropY, cropWidth, cropHeight)));
+    }
+
     private static Color ParseColor(string? value, Color fallback)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -780,7 +803,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         var maxLineHeight = fontSize;
 
         Log.Information(textBlock.Name);
-        if (textBlock.Name.Equals("Rules Text", StringComparison.OrdinalIgnoreCase))
+        /*if (textBlock.Name.Equals("Rules Text", StringComparison.OrdinalIgnoreCase))
         {
             var startingSize = Math.Ceiling((double)(textBlock.Size * card.Height));
             Log.Information("Rules Text block detected. Starting font size based on card height: {StartingSize} Current {FontSide}", startingSize, fontSize);
@@ -789,7 +812,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 maxLineHeight = (float)Math.Ceiling(fontSize * 0.7f);
                 Log.Information("Applying 80% line height reduction for Rules Text to prevent excessive gaps. Starting font size: {StartingSize}, Applied line height: {LineHeight}", startingSize, maxLineHeight);
             }
-        }
+        }*/
 
         state.AddLineSpacing = maxLineHeight * 0.35f; // Start with 35% extra spacing for tags that affect alignment like {bar}
 
@@ -1101,12 +1124,19 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             var shouldCenter = textBlock.NoVerticalCenter != true;
 
 // If it's the rules text on a special frame (Oil Slick, Mystical Archive, etc.), force top-align!
-            if (name.Equals("rules", StringComparison.OrdinalIgnoreCase) && !isStandardFrame) shouldCenter = false;
+            //if (name.Equals("rules", StringComparison.OrdinalIgnoreCase) && !isStandardFrame) shouldCenter = false;
 
             if (shouldCenter)
             {
-                var f = name.Equals("rules", StringComparison.OrdinalIgnoreCase) ? 0.35f : 0.15f;
-                verticalAdjust = Math.Max(0, (height - measuredHeight + currentFontSize * f) / 2f);
+                //var f = name.Equals("rules", StringComparison.OrdinalIgnoreCase) ? 0.45f : 0.15f;
+               // verticalAdjust =  (height - measuredHeight + currentFontSize * f) / 2f;
+                verticalAdjust =  (height - measuredHeight + currentFontSize * 0.15f) / 2f;
+            
+            }
+            
+            if (name.Equals("pt", StringComparison.OrdinalIgnoreCase))
+            {
+                verticalAdjust -= currentFontSize * 0.10f;
             }
 
             // Draw onto the card, shifting left and up to compensate for our protective padding!
@@ -1180,7 +1210,13 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         }
     }
 
-    public async Task<Stream> RenderAsync(CardData card, bool preview, int? maxDimension, CancellationToken cancellationToken = default)
+    public async Task<Stream> RenderAsync(
+        CardData card,
+        bool preview,
+        int? maxDimension,
+        string? cardSizeProfileName,
+        bool isPrintImage,
+        CancellationToken cancellationToken = default)
     {
         if (card.Width == null || card.Height == null) Log.Error("Card dimensions not specified, using defaults.");
 
@@ -1202,10 +1238,23 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
         await DrawArtAsync(canvas, card, cancellationToken);
         await DrawFramesAsync(canvas, card, cancellationToken);
-        await DrawSetSymbolAsync(canvas, card, cancellationToken); // <--- NEW
+        await DrawSetSymbolAsync(canvas, card, cancellationToken);
         DrawText(canvas, card);
 
-        if (preview) ResizePreview(canvas, maxDimension ?? 900);
+        using var outputCanvas = canvas.Clone();
+        var profile = ResolveOutputProfile(card, cardSizeProfileName);
+
+        if (isPrintImage)
+        {
+            // Match creator server pipeline behavior for print/bleed exports.
+            BleedAdder.AddBleed(outputCanvas, profile);
+        }
+        else
+        {
+            CropToCutSize(outputCanvas, profile.CutSize.Width, profile.CutSize.Height);
+        }
+
+        if (preview) ResizePreview(outputCanvas, maxDimension ?? 900);
 
         /*
         if (card.Margins.HasValue && card.Margins.Value)
@@ -1224,7 +1273,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         */
 
         var output = new MemoryStream();
-        await canvas.SaveAsPngAsync(output, cancellationToken);
+        await outputCanvas.SaveAsPngAsync(output, cancellationToken);
         output.Seek(0, SeekOrigin.Begin);
 
         // OPTIMIZATION: Good call keeping this. Releases pooled arrays back to the OS between generations.

@@ -26,7 +26,13 @@ public static class RenderV2Endpoints
                 return Results.BadRequest(new { error = "Invalid cardJson payload." });
             }
 
-            var stream = await renderService.RenderAsync(cardData, preview: true, request.MaxDimension, cancellationToken);
+            var stream = await renderService.RenderAsync(
+                cardData,
+                preview: true,
+                request.MaxDimension,
+                request.CardSizeProfileName,
+                request.IsPrintImage,
+                cancellationToken);
             return Results.Stream(stream, "image/png");
         });
 
@@ -46,7 +52,13 @@ public static class RenderV2Endpoints
                 return Results.BadRequest(new { error = "Invalid cardJson payload." });
             }
 
-            var stream = await renderService.RenderAsync(cardData, preview: false, request.MaxDimension, cancellationToken);
+            var stream = await renderService.RenderAsync(
+                cardData,
+                preview: false,
+                request.MaxDimension,
+                request.CardSizeProfileName,
+                request.IsPrintImage,
+                cancellationToken);
             return Results.Stream(stream, "image/png", fileDownloadName: "renderer-v2.png");
         });
 

@@ -59,4 +59,38 @@ public static class CardSizeCatalog
         return !string.IsNullOrWhiteSpace(name)
                && string.Equals(profile.Name, name, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Gets the profile whose cut dimensions are closest to the provided card cut size.
+    /// </summary>
+    public static CardSizeProfile GetClosestByCutSize(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return DefaultProfile;
+        }
+
+        CardSizeProfile? best = null;
+        double bestScore = double.MaxValue;
+
+        foreach (var profile in Profiles)
+        {
+            var dx = profile.CutSize.Width - width;
+            var dy = profile.CutSize.Height - height;
+            var distance = (dx * dx) + (dy * dy);
+
+            var profileAspect = profile.CutSize.Width / (double)profile.CutSize.Height;
+            var cardAspect = width / (double)height;
+            var aspectPenalty = Math.Abs(profileAspect - cardAspect) * 1_000_000d;
+            var score = distance + aspectPenalty;
+
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = profile;
+            }
+        }
+
+        return best ?? DefaultProfile;
+    }
 }

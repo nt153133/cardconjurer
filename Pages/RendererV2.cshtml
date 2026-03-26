@@ -30,6 +30,14 @@
         <label for="renderer-v2-max-dimension">Preview max dimension</label>
         <input id="renderer-v2-max-dimension" type="number" min="256" max="2048" value="900" style="width:7rem;" />
 
+        <label for="renderer-v2-size-profile">Size profile</label>
+        <select id="renderer-v2-size-profile" style="min-width:220px;max-width:320px;">
+            <option value="">Auto (closest to card cut size)</option>
+        </select>
+
+        <label for="renderer-v2-print-image">Print/bleed output</label>
+        <input id="renderer-v2-print-image" type="checkbox" />
+
         <button id="renderer-v2-preview" class="button" type="button">Render Preview</button>
         <button id="renderer-v2-download" class="button" type="button">Render &amp; Download</button>
     </div>
@@ -48,16 +56,111 @@
     var savedCardsSelect = document.getElementById('renderer-v2-saved-cards');
     var fileInput = document.getElementById('renderer-v2-file');
     var maxDimensionInput = document.getElementById('renderer-v2-max-dimension');
+    var sizeProfileSelect = document.getElementById('renderer-v2-size-profile');
+    var printImageToggle = document.getElementById('renderer-v2-print-image');
     var previewButton = document.getElementById('renderer-v2-preview');
     var downloadButton = document.getElementById('renderer-v2-download');
     var status = document.getElementById('renderer-v2-status');
     var image = document.getElementById('renderer-v2-image');
 
     var previewObjectUrl = null;
+    var sizeProfiles = [];
 
     function setStatus(message, isError) {
         status.textContent = message;
         status.style.color = isError ? '#f66' : '#ddd';
+    }
+
+    function findClosestProfileName(width, height) {
+        if (!Array.isArray(sizeProfiles) || sizeProfiles.length === 0) {
+            return '';
+        }
+
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+            return '';
+        }
+
+        var bestName = '';
+        var bestScore = Number.POSITIVE_INFINITY;
+        var cardAspect = width / height;
+
+        sizeProfiles.forEach(function (profile) {
+            if (!profile || !profile.cut) {
+                return;
+            }
+
+            var cutWidth = Number(profile.cut.width);
+            var cutHeight = Number(profile.cut.height);
+            if (!Number.isFinite(cutWidth) || !Number.isFinite(cutHeight) || cutWidth <= 0 || cutHeight <= 0) {
+                return;
+            }
+
+            var dx = cutWidth - width;
+            var dy = cutHeight - height;
+            var distance = (dx * dx) + (dy * dy);
+            var profileAspect = cutWidth / cutHeight;
+            var aspectPenalty = Math.abs(profileAspect - cardAspect) * 1000000;
+            var score = distance + aspectPenalty;
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestName = String(profile.name || '');
+            }
+        });
+
+        return bestName;
+    }
+
+    function autoSelectProfileForCard(parsedCard) {
+        if (!sizeProfileSelect || !parsedCard) {
+            return;
+        }
+
+        var width = Number(parsedCard.width);
+        var height = Number(parsedCard.height);
+        var closest = findClosestProfileName(width, height);
+        if (!closest) {
+            return;
+        }
+
+        sizeProfileSelect.value = closest;
+    }
+
+    async function loadSizeProfiles() {
+        if (!sizeProfileSelect) {
+            return;
+        }
+
+        try {
+            var response = await fetch('/api/card-image/size-profiles');
+            if (!response.ok) {
+                throw new Error('Failed to load size profiles.');
+            }
+
+            var payload = await response.json();
+            var profiles = Array.isArray(payload && payload.profiles) ? payload.profiles : [];
+            sizeProfiles = profiles;
+
+            sizeProfileSelect.innerHTML = '';
+
+            var autoOption = document.createElement('option');
+            autoOption.value = '';
+            autoOption.textContent = 'Auto (closest to card cut size)';
+            sizeProfileSelect.appendChild(autoOption);
+
+            profiles.forEach(function (profile) {
+                if (!profile || !profile.name || !profile.cut) {
+                    return;
+                }
+
+                var option = document.createElement('option');
+                option.value = profile.name;
+                option.textContent = profile.name + ' (' + profile.cut.width + ' x ' + profile.cut.height + ')';
+                sizeProfileSelect.appendChild(option);
+            });
+        } catch (error) {
+            setStatus('Could not load size profiles: ' + (error.message || String(error)), true);
+        }
     }
 
     function getPayload() {
@@ -67,6 +170,10 @@
         }
 
         var parsed = JSON.parse(raw);
+        if (sizeProfileSelect && !sizeProfileSelect.value) {
+            autoSelectProfileForCard(parsed);
+        }
+
         var maxDimension = parseInt(maxDimensionInput.value, 10);
         if (!Number.isFinite(maxDimension)) {
             maxDimension = 900;
@@ -74,7 +181,9 @@
 
         return {
             cardJson: parsed,
-            maxDimension: maxDimension
+            maxDimension: maxDimension,
+            cardSizeProfileName: sizeProfileSelect && sizeProfileSelect.value ? sizeProfileSelect.value : null,
+            isPrintImage: !!(printImageToggle && printImageToggle.checked)
         };
     }
 
@@ -143,6 +252,7 @@
             // We only want the inner cardJson in the textarea so it can be sent straight to the renderer.
             var details = await response.json();
             jsonInput.value = JSON.stringify(details.cardJson, null, 2);
+            autoSelectProfileForCard(details.cardJson);
             setStatus('Loaded card: ' + (details.displayName || cardId), false);
         } catch (error) {
             setStatus('Error loading card: ' + (error.message || String(error)), true);
@@ -159,6 +269,13 @@
         reader.onload = function () {
             jsonInput.value = String(reader.result || '');
             savedCardsSelect.value = '';
+
+            try {
+                autoSelectProfileForCard(JSON.parse(jsonInput.value));
+            } catch (_) {
+                // Leave profile unchanged for invalid JSON until user fixes it.
+            }
+
             setStatus('Loaded JSON from file.', false);
         };
         reader.onerror = function () {
@@ -203,6 +320,7 @@
     });
 
     loadSavedCards();
+    loadSizeProfiles();
 })();
 </script>
 }

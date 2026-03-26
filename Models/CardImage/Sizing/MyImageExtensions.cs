@@ -99,7 +99,7 @@ public static class MyImageExtensions
         for (var x = 0; x < image.Width; x++)
         {
             var pixel = image[x, y];
-            if (pixel.R > 10 || pixel.G > 10 || pixel.B > 10) return false;
+            if (pixel.R > 5 || pixel.G > 5 || pixel.B > 5) return false;
         }
 
         return true;
@@ -119,7 +119,7 @@ public static class MyImageExtensions
         for (var y = 0; y < image.Height; y++)
         {
             var pixel = image[x, y];
-            if (pixel.R > 10 || pixel.G > 10 || pixel.B > 10) return false;
+            if (pixel.R > 5 || pixel.G > 5 || pixel.B > 5) return false;
         }
 
         return true;
