@@ -154,8 +154,11 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
     {
         if (card.Frames is null || card.Frames.Count == 0) return;
 
-        var marginX = 0; //card.MarginX ?? 0;
-        var marginY = 0; //card.MarginY ?? 0;
+        // JS parity: frame coordinates are normalized against cut size, then shifted by margins.
+        var cardWidth = card.Width ?? DefaultWidth;
+        var cardHeight = card.Height ?? DefaultHeight;
+        var marginX = card.MarginX ?? 0;
+        var marginY = card.MarginY ?? 0;
 
         foreach (var frame in card.Frames.AsEnumerable().Reverse())
         {
@@ -165,10 +168,15 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             if (sourceFrame is null) continue;
 
             var bounds = frame.Bounds;
-            var x = ScaleX(bounds?.X ?? 0, canvas.Width, marginX);
-            var y = ScaleY(bounds?.Y ?? 0, canvas.Height, marginY);
-            var width = ScaleWidth(bounds?.Width ?? 1, canvas.Width);
-            var height = ScaleHeight(bounds?.Height ?? 1, canvas.Height);
+            var boundsX = bounds?.X ?? 0;
+            var boundsY = bounds?.Y ?? 0;
+            var boundsWidth = bounds?.Width ?? 1;
+            var boundsHeight = bounds?.Height ?? 1;
+
+            var x = ScaleX(boundsX, cardWidth, marginX);
+            var y = ScaleY(boundsY, cardHeight, marginY);
+            var width = ScaleWidth(boundsWidth, cardWidth);
+            var height = ScaleHeight(boundsHeight, cardHeight);
 
             if (width <= 0 || height <= 0) continue;
 
@@ -178,23 +186,64 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             // OPTIMIZATION: Eliminated full-canvas 'layer'. Working directly on the sized image chunk.
             using var sizedFrame = sourceFrame.Clone(ctx => ctx.Resize(width, height, resampler));
 
+            Image<Rgba32>? combinedMask = null;
+            var hasMaskData = false;
+
             if (frame.Masks is {Count: > 0})
             {
-                // OPTIMIZATION: Mask canvas only needs to be the size of the frame, not the whole card.
-                using var combinedMask = new Image<Rgba32>(width, height);
+                combinedMask = new Image<Rgba32>(width, height);
+                var ogBounds = frame.OgBounds ?? bounds;
+                var ogX = ogBounds?.X ?? boundsX;
+                var ogY = ogBounds?.Y ?? boundsY;
+                var ogWidth = ogBounds?.Width ?? boundsWidth;
+                var ogHeight = ogBounds?.Height ?? boundsHeight;
+                if (Math.Abs(ogWidth) < 1e-9) ogWidth = 1;
+                if (Math.Abs(ogHeight) < 1e-9) ogHeight = 1;
+
+                var maskScaleX = boundsWidth / ogWidth;
+                var maskScaleY = boundsHeight / ogHeight;
+
+                var maskXCard = boundsX - ogX - (ogX * (maskScaleX - 1));
+                var maskYCard = boundsY - ogY - (ogY * (maskScaleY - 1));
+                var maskX = ScaleX(maskXCard, cardWidth, marginX) - x;
+                var maskY = ScaleY(maskYCard, cardHeight, marginY) - y;
+                var maskWidth = ScaleWidth(maskScaleX, cardWidth);
+                var maskHeight = ScaleHeight(maskScaleY, cardHeight);
+
                 foreach (var mask in frame.Masks)
                 {
                     if (mask is null || string.IsNullOrWhiteSpace(mask.Src)) continue;
 
                     using var sourceMask = await LoadImageAsync(mask.Src, cancellationToken);
                     if (sourceMask is null) continue;
+                    if (maskWidth <= 0 || maskHeight <= 0) continue;
 
                     // OPTIMIZATION: Reduced from Lanczos8 to Lanczos3 for massive performance gain and less ringing.
-                    using var sizedMask = sourceMask.Clone(ctx => ctx.Resize(width, height, KnownResamplers.Lanczos3));
-                    combinedMask.Mutate(ctx => ctx.DrawImage(sizedMask, new Point(0, 0), 1f));
-                }
+                    using var sizedMask = sourceMask.Clone(ctx => ctx.Resize(maskWidth, maskHeight, KnownResamplers.Lanczos3));
+                    using var positionedMask = new Image<Rgba32>(width, height);
+                    positionedMask.Mutate(ctx => ctx.DrawImage(sizedMask, new Point(maskX, maskY), 1f));
 
-                ApplyMaskAlpha(sizedFrame, combinedMask);
+                    CombineMaskAlpha(combinedMask, positionedMask, hasMaskData);
+                    hasMaskData = true;
+                }
+            }
+
+            var opacity = (float)Math.Clamp((frame.Opacity ?? 100) / 100d, 0d, 1d);
+
+            // JS parity: preserveAlpha branch runs before overlays/HSL/erase.
+            if (frame.PreserveAlpha == true)
+            {
+                if (combinedMask is not null && hasMaskData) ApplyPreserveAlphaBlendWithMask(canvas, sizedFrame, combinedMask, opacity, x, y);
+                else ApplyPreserveAlphaBlend(canvas, sizedFrame, opacity, x, y);
+
+                combinedMask?.Dispose();
+                continue;
+            }
+
+            if (combinedMask is not null)
+            {
+                if (hasMaskData) ApplyMaskAlpha(sizedFrame, combinedMask);
+                combinedMask.Dispose();
             }
 
             // OPTIMIZATION: Overlays and adjustments now process a fraction of the pixels (only the frame bounds)
@@ -202,18 +251,10 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
             if ((frame.HslHue ?? 0) != 0 || (frame.HslSaturation ?? 0) != 0 || (frame.HslLightness ?? 0) != 0) ApplyHslAdjustments(sizedFrame, frame.HslHue ?? 0, frame.HslSaturation ?? 0, frame.HslLightness ?? 0);
 
-            var opacity = (float)Math.Clamp((frame.Opacity ?? 100) / 100d, 0d, 1d);
-
             // OPTIMIZATION: Passed x and y offsets to the custom blend modes since sizedFrame is no longer full-canvas
             if (frame.Erase == true)
             {
                 ApplyErase(canvas, sizedFrame, opacity, x, y);
-                continue;
-            }
-
-            if (frame.PreserveAlpha == true)
-            {
-                ApplyPreserveAlphaBlend(canvas, sizedFrame, opacity, x, y);
                 continue;
             }
 
@@ -372,6 +413,26 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         });
     }
 
+    private static void CombineMaskAlpha(Image<Rgba32> combinedMask, Image<Rgba32> nextMask, bool hasMaskData)
+    {
+        combinedMask.ProcessPixelRows(nextMask, (combinedRows, nextRows) =>
+        {
+            for (var y = 0; y < combinedRows.Height; y++)
+            {
+                var combinedRow = combinedRows.GetRowSpan(y);
+                var nextRow = nextRows.GetRowSpan(y);
+
+                for (var x = 0; x < combinedRow.Length; x++)
+                {
+                    var nextAlpha = nextRow[x].A;
+                    combinedRow[x].A = hasMaskData
+                        ? (byte)(combinedRow[x].A * nextAlpha / 255)
+                        : nextAlpha;
+                }
+            }
+        });
+    }
+
     private static void ApplyColorOverlay(Image<Rgba32> layer, Color overlay)
     {
         var overlayPixel = overlay.ToPixel<Rgba32>();
@@ -462,6 +523,36 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                     if (layerRow[x].A == 0) continue;
 
                     var blend = layerRow[x].A / 255f * opacity;
+                    canvasRow[canvasX].R = (byte)Math.Clamp(canvasRow[canvasX].R * (1 - blend) + layerRow[x].R * blend, 0, 255);
+                    canvasRow[canvasX].G = (byte)Math.Clamp(canvasRow[canvasX].G * (1 - blend) + layerRow[x].G * blend, 0, 255);
+                    canvasRow[canvasX].B = (byte)Math.Clamp(canvasRow[canvasX].B * (1 - blend) + layerRow[x].B * blend, 0, 255);
+                }
+            }
+        });
+    }
+
+    private static void ApplyPreserveAlphaBlendWithMask(Image<Rgba32> canvas, Image<Rgba32> layer, Image<Rgba32> mask, float opacity, int offsetX, int offsetY)
+    {
+        canvas.ProcessPixelRows(layer, (canvasRows, layerRows) =>
+        {
+            for (var y = 0; y < layerRows.Height; y++)
+            {
+                var canvasY = y + offsetY;
+                if (canvasY < 0 || canvasY >= canvasRows.Height) continue;
+
+                var canvasRow = canvasRows.GetRowSpan(canvasY);
+                var layerRow = layerRows.GetRowSpan(y);
+
+                for (var x = 0; x < layerRow.Length; x++)
+                {
+                    var canvasX = x + offsetX;
+                    if (canvasX < 0 || canvasX >= canvasRow.Length) continue;
+
+                    if (layerRow[x].A == 0) continue;
+
+                    var blend = mask[x, y].A / 255f * opacity;
+                    if (blend <= 0) continue;
+
                     canvasRow[canvasX].R = (byte)Math.Clamp(canvasRow[canvasX].R * (1 - blend) + layerRow[x].R * blend, 0, 255);
                     canvasRow[canvasX].G = (byte)Math.Clamp(canvasRow[canvasX].G * (1 - blend) + layerRow[x].G * blend, 0, 255);
                     canvasRow[canvasX].B = (byte)Math.Clamp(canvasRow[canvasX].B * (1 - blend) + layerRow[x].B * blend, 0, 255);
@@ -941,6 +1032,11 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         if (card.Text is null || card.Text.Count == 0) return;
         EnsureFontsLoaded();
 
+        var cardWidth = card.Width ?? DefaultWidth;
+        var cardHeight = card.Height ?? DefaultHeight;
+        var marginX = card.MarginX ?? 0;
+        var marginY = card.MarginY ?? 0;
+
         foreach (var (name, textBlock) in card.Text)
         {
             if (textBlock is null || string.IsNullOrWhiteSpace(textBlock.Text)) continue;
@@ -948,14 +1044,14 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             var tokens = Tokenizer.TokenizeText(textBlock.Text, card);
             if (tokens.Count == 0) continue;
 
-            var width = ScaleWidth(textBlock.Width ?? 1, canvas.Width);
-            var height = ScaleHeight(textBlock.Height ?? 1, canvas.Height);
+            var width = ScaleWidth(textBlock.Width ?? 1, cardWidth);
+            var height = ScaleHeight(textBlock.Height ?? 1, cardHeight);
             if (width <= 1 || height <= 1) continue;
 
-            var x = ScaleX(textBlock.X ?? 0, canvas.Width, 0);
-            var y = ScaleY(textBlock.Y ?? 0, canvas.Height, 0);
+            var x = ScaleX(textBlock.X ?? 0, cardWidth, marginX);
+            var y = ScaleY(textBlock.Y ?? 0, cardHeight, marginY);
 
-            var startingFontSize = ResolveFontSize(textBlock, card.Height.Value);
+            var startingFontSize = ResolveFontSize(textBlock, cardHeight);
 
             var alignment = ResolveAlignment(textBlock.Align);
             var isOneLine = textBlock.OneLine == true;
@@ -1013,9 +1109,6 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 verticalAdjust = Math.Max(0, (height - measuredHeight + currentFontSize * f) / 2f);
             }
 
-// Draw onto the card, shifting left and up to compensate for our protective padding!
-            canvas.Mutate(ctx => ctx.DrawImage(textLayer, new Point(x - padding, y - padding + (int)verticalAdjust), 1f));
-
             // Draw onto the card, shifting left and up to compensate for our protective padding!
             canvas.Mutate(ctx => ctx.DrawImage(textLayer, new Point(x - padding, y - padding + (int)verticalAdjust), 1f));
         }
@@ -1023,12 +1116,27 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
     private async Task DrawSetSymbolAsync(Image<Rgba32> canvas, CardData card, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(card.SetSymbolSource) || card.SetSymbolBounds is null) return;
+        if (string.IsNullOrWhiteSpace(card.SetSymbolSource)) return;
 
+        var cardWidth = card.Width ?? DefaultWidth;
+        var cardHeight = card.Height ?? DefaultHeight;
+        var marginX = card.MarginX ?? 0;
+        var marginY = card.MarginY ?? 0;
         var bounds = card.SetSymbolBounds;
-        var targetWidth = ScaleWidth(bounds.Width ?? 0.12, canvas.Width);
-        var targetHeight = ScaleHeight(bounds.Height ?? 0.04, canvas.Height);
-        if (targetWidth <= 0 || targetHeight <= 0) return;
+
+        var hasExplicitPosition = card.SetSymbolX.HasValue || card.SetSymbolY.HasValue;
+        var targetX = ScaleX(card.SetSymbolX ?? 0, cardWidth, marginX);
+        var targetY = ScaleY(card.SetSymbolY ?? 0, cardHeight, marginY);
+        var zoom = card.SetSymbolZoom ?? 1;
+        if (zoom <= 0) zoom = 1;
+
+        int boundsWidth = 0;
+        int boundsHeight = 0;
+        if (bounds is not null)
+        {
+            boundsWidth = ScaleWidth(bounds.Width ?? 0.12, cardWidth);
+            boundsHeight = ScaleHeight(bounds.Height ?? 0.04, cardHeight);
+        }
 
         Image<Rgba32>? setSymbolImage = null;
 
@@ -1036,39 +1144,39 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         if (card.SetSymbolSource.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
         {
             var localPath = ResolveLocalPath(card.SetSymbolSource);
-            if (localPath != null)
-                // Vector rasterization directly to the target size!
-                setSymbolImage = await _svgService.RasterizeFrameAsync(localPath, targetWidth, targetHeight);
+            if (localPath != null && boundsWidth > 0 && boundsHeight > 0)
+                // SVG rasterization requires explicit target dimensions.
+                setSymbolImage = await _svgService.RasterizeFrameAsync(localPath, boundsWidth, boundsHeight);
         }
         else
         {
-            // Standard PNG/JPG load
+            // Standard PNG/JPG load: JS parity uses setSymbolZoom against intrinsic image size.
             using var rawImage = await LoadImageAsync(card.SetSymbolSource, cancellationToken);
             if (rawImage != null)
-                // Resize the PNG to fit INSIDE the bounds while maintaining aspect ratio
-                setSymbolImage = rawImage.Clone(ctx => ctx.Resize(new ResizeOptions
-                {
-                    Size = new Size(targetWidth, targetHeight),
-                    Mode = ResizeMode.Max,
-                    Sampler = KnownResamplers.Lanczos3
-                }));
+            {
+                var targetWidth = Math.Max(1, (int)Math.Round(rawImage.Width * zoom));
+                var targetHeight = Math.Max(1, (int)Math.Round(rawImage.Height * zoom));
+                setSymbolImage = rawImage.Clone(ctx => ctx.Resize(targetWidth, targetHeight, KnownResamplers.Lanczos3));
+            }
         }
 
         if (setSymbolImage == null) return;
 
         using (setSymbolImage)
         {
-            // 2. Calculate final placement based on bounds and alignment
-            float x = ScaleX(bounds.X ?? 0, canvas.Width, 0);
-            float y = ScaleY(bounds.Y ?? 0, canvas.Height,  0);
+            if (!hasExplicitPosition && bounds is not null)
+            {
+                targetX = ScaleX(bounds.X ?? 0, cardWidth, marginX);
+                targetY = ScaleY(bounds.Y ?? 0, cardHeight, marginY);
 
-            if (bounds.Horizontal == "center") x -= setSymbolImage.Width / 2f;
-            else if (bounds.Horizontal == "right") x -= setSymbolImage.Width;
+                if (string.Equals(bounds.Horizontal, "center", StringComparison.OrdinalIgnoreCase)) targetX -= setSymbolImage.Width / 2;
+                else if (string.Equals(bounds.Horizontal, "right", StringComparison.OrdinalIgnoreCase)) targetX -= setSymbolImage.Width;
 
-            if (bounds.Vertical == "center") y -= setSymbolImage.Height / 2f;
-            else if (bounds.Vertical == "bottom") y -= setSymbolImage.Height;
+                if (string.Equals(bounds.Vertical, "center", StringComparison.OrdinalIgnoreCase)) targetY -= setSymbolImage.Height / 2;
+                else if (string.Equals(bounds.Vertical, "bottom", StringComparison.OrdinalIgnoreCase)) targetY -= setSymbolImage.Height;
+            }
 
-            canvas.Mutate(ctx => ctx.DrawImage(setSymbolImage, new Point((int)x, (int)y), 1f));
+            canvas.Mutate(ctx => ctx.DrawImage(setSymbolImage, new Point(targetX, targetY), 1f));
         }
     }
 
