@@ -150,10 +150,36 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
     //  Responsibility 2: Full Frame Rasterization (no caching)
     // ═════════════════════════════════════════════════════════════════════
 
+    /// <inheritdoc/>
+    public (double Width, double Height)? GetSvgNativeDimensions(string absoluteFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(absoluteFilePath) || !File.Exists(absoluteFilePath))
+            return null;
+
+        try
+        {
+            // Parser.FromFile is CPU-bound but fast (no rasterization); safe to call on calling thread.
+            var page = Parser.FromFile(absoluteFilePath);
+            if (page.Width > 0 && page.Height > 0)
+                return (page.Width, page.Height);
+
+            Log.Warning("SVG has zero or negative dimensions: {Path} ({W}x{H})", absoluteFilePath, page.Width, page.Height);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to read native SVG dimensions: {Path}", absoluteFilePath);
+            return null;
+        }
+    }
+
     public async Task<Image<Rgba32>?> RasterizeFrameAsync(string absoluteFilePath, int targetWidth, int targetHeight)
     {
         if (string.IsNullOrWhiteSpace(absoluteFilePath) || targetWidth <= 0 || targetHeight <= 0)
+        {
+            Log.Error("Invalid parameters for RasterizeFrameAsync: {Path}, {W}x{H}", absoluteFilePath, targetWidth, targetHeight);
             return null;
+        }
 
         if (!File.Exists(absoluteFilePath))
         {
@@ -192,11 +218,22 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
                 var scale = Math.Max(scaleX, scaleY);
 
                 if (scale <= 0)
+                {
+                    Log.Error("Calculated non-positive scale for SVG frame: {Path} at target {W}x{H} (page {PW}x{PH})", absoluteFilePath, targetWidth, targetHeight, page.Width, page.Height);
                     return null;
+                }
 
                 try
                 {
-                    return page.SaveAsImage(scale);
+                    Log.Information("Rasterizing SVG frame: {Path} at target {W}x{H} with scale {Scale}", absoluteFilePath, targetWidth, targetHeight, scale);
+                    var img= page.SaveAsImage(scale);
+                    if (img == null)
+                    {
+                        Log.Error("VectSharp failed to rasterize SVG frame: {Path} at scale {Scale}", absoluteFilePath, scale);
+                        Log.Information($"{page.Graphics.TryRasterise(page.Graphics.GetBounds(),1,true, out var debugImg)}");
+                        
+                    }
+                    return img;
                 }
                 catch (Exception ex)
                 {

@@ -697,7 +697,15 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
     private string? ResolveLocalPath(string source)
     {
         var normalized = source.Trim();
-
+        // Strip any absolute localhost origin so "http://localhost:PORT/img/..." is treated
+        // identically to a root-relative "/img/..." path.
+        if (normalized.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase)
+            || normalized.StartsWith("https://localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            var slashAfterHost = normalized.IndexOf('/', normalized.IndexOf("://") + 3);
+            normalized = slashAfterHost >= 0 ? normalized[slashAfterHost..] : "/";
+        }
+        
         if (normalized.StartsWith("/"))
         {
             if (normalized.StartsWith(_publicUploadsBasePath + "/", StringComparison.OrdinalIgnoreCase))
@@ -791,7 +799,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         bool measureOnly,
         CardTextObject textBlock,
         CardData card,
-        int padding = 0)
+        int padding = 0, bool fontSizedUnchanged = false)
     {
         var state = new TextRenderState
         {
@@ -801,6 +809,11 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         };
 
         var maxLineHeight = fontSize;
+
+        if (fontSizedUnchanged)
+        {
+            maxLineHeight = fontSize * 0.7f;
+        }
 
         Log.Information(textBlock.Name);
         /*if (textBlock.Name.Equals("Rules Text", StringComparison.OrdinalIgnoreCase))
@@ -1106,12 +1119,14 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 break;
             }
 
+            var fontSized = currentFontSize == startingFontSize;
+     
             // --- FINAL RENDER WITH PADDING HACK ---
             var padding = (int)(currentFontSize * 0.5f); // Generous padding to protect ascenders
 
             // Make the image larger to hold the padding
             using var textLayer = new Image<Rgba32>(width + padding * 2, height + padding * 2);
-            MeasureAndDrawTokens(textLayer, tokens, currentFontSize, width, alignment, false, textBlock, card, padding);
+            MeasureAndDrawTokens(textLayer, tokens, currentFontSize, width, alignment, false, textBlock, card, padding,fontSized);
 
             // --- VERTICAL CENTERING ---
             var verticalAdjust = 0f;
@@ -1136,7 +1151,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             
             if (name.Equals("pt", StringComparison.OrdinalIgnoreCase))
             {
-                verticalAdjust -= currentFontSize * 0.10f;
+                verticalAdjust -= currentFontSize * 0.20f;
             }
 
             // Draw onto the card, shifting left and up to compensate for our protective padding!
@@ -1153,10 +1168,17 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         var marginX = card.MarginX ?? 0;
         var marginY = card.MarginY ?? 0;
         var bounds = card.SetSymbolBounds;
+        var isSvgSymbol = card.SetSymbolSource.EndsWith(".svg", StringComparison.OrdinalIgnoreCase);
 
-        var hasExplicitPosition = card.SetSymbolX.HasValue || card.SetSymbolY.HasValue;
+        // Only treat placement as explicit when both coordinates are present.
+        // Legacy cards sometimes contain one coordinate but not the other.
+        var hasExplicitPosition = card.SetSymbolX.HasValue && card.SetSymbolY.HasValue;
+
+        // JS parity: scaleX(card.setSymbolX) = (setSymbolX + marginX) * cardWidth
+        // setSymbolX/Y already have alignment (center/right) baked in from JS resetSetSymbol().
         var targetX = ScaleX(card.SetSymbolX ?? 0, cardWidth, marginX);
         var targetY = ScaleY(card.SetSymbolY ?? 0, cardHeight, marginY);
+
         var zoom = card.SetSymbolZoom ?? 1;
         if (zoom <= 0) zoom = 1;
 
@@ -1170,13 +1192,81 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
         Image<Rgba32>? setSymbolImage = null;
 
-        // 1. Resolve mixed formats (SVG vs PNG/JPG)
-        if (card.SetSymbolSource.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+        if (isSvgSymbol)
         {
             var localPath = ResolveLocalPath(card.SetSymbolSource);
-            if (localPath != null && boundsWidth > 0 && boundsHeight > 0)
-                // SVG rasterization requires explicit target dimensions.
+            if (localPath == null)
+            {
+                Log.Error("Failed to resolve local path for SVG set symbol. Source: {Source}", card.SetSymbolSource);
+                return;
+            }
+
+            // JS parity: the JS renderer stores the SVG in an <img> element and draws at
+            //   symbolWidth = setSymbol.width * card.setSymbolZoom
+            //   symbolHeight = setSymbol.height * card.setSymbolZoom
+            // so we must first determine the native SVG dimensions before rasterizing.
+            var nativeDims = _svgService.GetSvgNativeDimensions(localPath);
+
+            if (nativeDims.HasValue && nativeDims.Value.Width > 0)
+            {
+                if (hasExplicitPosition)
+                {
+                    // Normal path: explicit position + zoom → native SVG size × zoom.
+                    // targetX/Y are already the correct top-left pixel coordinates.
+                    var pixelW = Math.Max(1, (int)Math.Round(nativeDims.Value.Width * zoom));
+                    var pixelH = Math.Max(1, (int)Math.Round(nativeDims.Value.Height * zoom));
+                    Log.Information(
+                        "SVG set symbol: explicit position ({X},{Y}), native {NW}x{NH}, zoom {Zoom} → rasterize {PW}x{PH}",
+                        targetX, targetY, nativeDims.Value.Width, nativeDims.Value.Height, zoom, pixelW, pixelH);
+                    setSymbolImage = await _svgService.RasterizeFrameAsync(localPath, pixelW, pixelH);
+                    // targetX/Y remain as set by ScaleX(setSymbolX)/ScaleY(setSymbolY) — no extra alignment math.
+                }
+                else if (bounds is not null && boundsWidth > 0 && boundsHeight > 0)
+                {
+                    // No saved position: fit symbol into bounds box (replicates JS resetSetSymbol fit logic).
+                    // JS: if (symbol.width/height > boundsWidth/boundsHeight) → fit by width, else fit by height.
+                    var nativeAspect = nativeDims.Value.Width / nativeDims.Value.Height;
+                    var boundsAspect = (double)boundsWidth / boundsHeight;
+                    int fitW, fitH;
+                    if (nativeAspect > boundsAspect)
+                    {
+                        fitW = boundsWidth;
+                        fitH = Math.Max(1, (int)Math.Round(boundsWidth / nativeAspect));
+                    }
+                    else
+                    {
+                        fitH = boundsHeight;
+                        fitW = Math.Max(1, (int)Math.Round(boundsHeight * nativeAspect));
+                    }
+                    Log.Information(
+                        "SVG set symbol: no explicit position, fitting to bounds {BW}x{BH}, native aspect {NA:F3} → {FW}x{FH}",
+                        boundsWidth, boundsHeight, nativeAspect, fitW, fitH);
+                    setSymbolImage = await _svgService.RasterizeFrameAsync(localPath, fitW, fitH);
+
+                    // Apply bounds-based placement + alignment
+                    targetX = ScaleX(bounds.X ?? 0, cardWidth, marginX);
+                    targetY = ScaleY(bounds.Y ?? 0, cardHeight, marginY);
+                    if (string.Equals(bounds.Horizontal, "center", StringComparison.OrdinalIgnoreCase)) targetX -= fitW / 2;
+                    else if (string.Equals(bounds.Horizontal, "right", StringComparison.OrdinalIgnoreCase)) targetX -= fitW;
+                    if (string.Equals(bounds.Vertical, "center", StringComparison.OrdinalIgnoreCase)) targetY -= fitH / 2;
+                    else if (string.Equals(bounds.Vertical, "bottom", StringComparison.OrdinalIgnoreCase)) targetY -= fitH;
+                }
+            }
+            else if (boundsWidth > 0 && boundsHeight > 0)
+            {
+                // Fallback: could not read native SVG dimensions — use bounds size (old behaviour).
+                Log.Warning("Could not read native SVG dimensions for {Source}; falling back to bounds sizing.", card.SetSymbolSource);
                 setSymbolImage = await _svgService.RasterizeFrameAsync(localPath, boundsWidth, boundsHeight);
+                if (!hasExplicitPosition && bounds is not null)
+                {
+                    targetX = ScaleX(bounds.X ?? 0, cardWidth, marginX);
+                    targetY = ScaleY(bounds.Y ?? 0, cardHeight, marginY);
+                    if (string.Equals(bounds.Horizontal, "center", StringComparison.OrdinalIgnoreCase)) targetX -= boundsWidth / 2;
+                    else if (string.Equals(bounds.Horizontal, "right", StringComparison.OrdinalIgnoreCase)) targetX -= boundsWidth;
+                    if (string.Equals(bounds.Vertical, "center", StringComparison.OrdinalIgnoreCase)) targetY -= boundsHeight / 2;
+                    else if (string.Equals(bounds.Vertical, "bottom", StringComparison.OrdinalIgnoreCase)) targetY -= boundsHeight;
+                }
+            }
         }
         else
         {
@@ -1188,24 +1278,29 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
                 var targetHeight = Math.Max(1, (int)Math.Round(rawImage.Height * zoom));
                 setSymbolImage = rawImage.Clone(ctx => ctx.Resize(targetWidth, targetHeight, KnownResamplers.Lanczos3));
             }
-        }
-
-        if (setSymbolImage == null) return;
-
-        using (setSymbolImage)
-        {
-            if (!hasExplicitPosition && bounds is not null)
+            // PNG/JPG: if no explicit position, apply bounds alignment to the zoomed image
+            if (!hasExplicitPosition && bounds is not null && setSymbolImage is not null)
             {
                 targetX = ScaleX(bounds.X ?? 0, cardWidth, marginX);
                 targetY = ScaleY(bounds.Y ?? 0, cardHeight, marginY);
-
                 if (string.Equals(bounds.Horizontal, "center", StringComparison.OrdinalIgnoreCase)) targetX -= setSymbolImage.Width / 2;
                 else if (string.Equals(bounds.Horizontal, "right", StringComparison.OrdinalIgnoreCase)) targetX -= setSymbolImage.Width;
-
                 if (string.Equals(bounds.Vertical, "center", StringComparison.OrdinalIgnoreCase)) targetY -= setSymbolImage.Height / 2;
                 else if (string.Equals(bounds.Vertical, "bottom", StringComparison.OrdinalIgnoreCase)) targetY -= setSymbolImage.Height;
             }
+        }
 
+        if (setSymbolImage == null)
+        {
+            Log.Error("Failed to load set symbol image from source: {Source}", card.SetSymbolSource);
+            return;
+        }
+
+        using (setSymbolImage)
+        {
+            Log.Information(
+                "Drawing set symbol. TargetX: {TargetX}, TargetY: {TargetY}, Size: {W}x{H}",
+                targetX, targetY, setSymbolImage.Width, setSymbolImage.Height);
             canvas.Mutate(ctx => ctx.DrawImage(setSymbolImage, new Point(targetX, targetY), 1f));
         }
     }
@@ -1235,9 +1330,11 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         }
 
         using var canvas = new Image<Rgba32>(tempW, tempH);
+        using var frameLayer = new Image<Rgba32>(tempW, tempH);
 
         await DrawArtAsync(canvas, card, cancellationToken);
-        await DrawFramesAsync(canvas, card, cancellationToken);
+        await DrawFramesAsync(frameLayer, card, cancellationToken);
+        canvas.Mutate(ctx => ctx.DrawImage(frameLayer, new Point(0, 0), 1f));
         await DrawSetSymbolAsync(canvas, card, cancellationToken);
         DrawText(canvas, card);
 

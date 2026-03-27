@@ -29,6 +29,16 @@ public interface ISvgRasterizationService
     /// <param name="targetHeight">Desired pixel height.</param>
     /// <returns>An Image&lt;Rgba32&gt; the caller must dispose, or null if the file cannot be loaded.</returns>
     Task<Image<Rgba32>?> RasterizeFrameAsync(string absoluteFilePath, int targetWidth, int targetHeight);
+
+    /// <summary>
+    /// Returns the native (intrinsic) width and height of an SVG document in points/px,
+    /// equivalent to the browser's <c>img.width</c> / <c>img.height</c> for an SVG loaded as an img element.
+    /// Used to calculate zoom-based render dimensions matching the JS renderer's
+    /// <c>setSymbol.width * card.setSymbolZoom</c> pattern.
+    /// </summary>
+    /// <param name="absoluteFilePath">Absolute path to the SVG file on disk.</param>
+    /// <returns>Native (Width, Height) tuple, or null if the file cannot be parsed.</returns>
+    (double Width, double Height)? GetSvgNativeDimensions(string absoluteFilePath);
     
     
 
