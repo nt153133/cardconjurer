@@ -36,6 +36,7 @@ try
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<ISvgRasterizationService, SvgRasterizationService>();
     builder.Services.AddSingleton<ICardRenderV2Service, CardRenderV2Service>();
+    builder.Services.AddSingleton<IPrepressService, PrepressService>();
 
     var app = builder.Build();
 

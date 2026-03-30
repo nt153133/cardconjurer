@@ -5,6 +5,7 @@ All notable product-facing changes should be added here.
 ## Unreleased
 
 ### Added
+- Prepress staging scaffold: added `IPrepressService` / `PrepressService` with explicit 5-stage pipeline hooks (ingestion/validation, RGB adjustments, separation+ICC conversion, K-only overprint trapping, finalize/export). Current behavior is intentionally pass-through and still returns a single composited PNG for `isPrintImage` while creating stable hook points for upcoming CMYK work.
 - Renderer V2 print pipeline staging: `ICardRenderV2Service` now supports split layered rendering (transparent text layer + non-text art/frame layer) with matched output dimensions/profile transforms. `POST /api/render-v2/full` keeps returning a single PNG by compositing those layers in-endpoint when `isPrintImage` is enabled.
 - `ISvgRasterizationService` + `SvgRasterizationService`: two-tier SVG rasterization service using VectSharp. Tier 1 caches parsed SVG `Page` objects indefinitely; Tier 2 caches rasterized `Image<Rgba32>` mana symbols in `IMemoryCache` with auto-dispose on eviction. Includes uncached frame rasterization for large card SVGs, per-key locks to prevent duplicate work, and a startup scan of `wwwroot/img/manaSymbols/` for symbol resolution.
 - Renderer V2: wired the "Load saved card" dropdown to `/api/cards` so server-saved cards populate on page load; selecting a card now fetches its full details and loads only the inner `cardJson` into the JSON textarea, ready to be sent to the render preview/download endpoints.

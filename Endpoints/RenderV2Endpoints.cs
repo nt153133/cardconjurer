@@ -1,9 +1,6 @@
 using System.Text.Json;
 using CardConjurer.Models.CardImage;
 using CardConjurer.Services.CardImage;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 
 namespace CardConjurer.Endpoints;
 
@@ -42,6 +39,7 @@ public static class RenderV2Endpoints
         group.MapPost("/full", async (
             RenderV2Request request,
             ICardRenderV2Service renderService,
+            IPrepressService prepressService,
             CancellationToken cancellationToken) =>
         {
             if (request.CardJson.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
@@ -68,7 +66,11 @@ public static class RenderV2Endpoints
                 using (layered.ArtLayerStream)
                 using (layered.TextLayerStream)
                 {
-                    var composited = await CompositeLayersAsync(layered.ArtLayerStream, layered.TextLayerStream, cancellationToken);
+                    var composited = await prepressService.ProcessPrintPipelineAsync(
+                        layered.ArtLayerStream,
+                        layered.TextLayerStream,
+                        new PrepressPipelineOptions(),
+                        cancellationToken);
                     return Results.Stream(composited, "image/png", fileDownloadName: "renderer-v2.png");
                 }
             }
@@ -123,30 +125,6 @@ public static class RenderV2Endpoints
         });
 
         return app;
-    }
-
-    private static async Task<Stream> CompositeLayersAsync(
-        Stream artLayerStream,
-        Stream textLayerStream,
-        CancellationToken cancellationToken)
-    {
-        artLayerStream.Seek(0, SeekOrigin.Begin);
-        textLayerStream.Seek(0, SeekOrigin.Begin);
-
-        using var artImage = await Image.LoadAsync<Rgba32>(artLayerStream, cancellationToken);
-        using var textImage = await Image.LoadAsync<Rgba32>(textLayerStream, cancellationToken);
-
-        if (artImage.Width != textImage.Width || artImage.Height != textImage.Height)
-        {
-            throw new InvalidOperationException("Layered render output size mismatch.");
-        }
-
-        artImage.Mutate(ctx => ctx.DrawImage(textImage, new Point(0, 0), 1f));
-
-        var output = new MemoryStream();
-        await artImage.SaveAsPngAsync(output, cancellationToken);
-        output.Seek(0, SeekOrigin.Begin);
-        return output;
     }
 }
 
