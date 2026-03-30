@@ -12,6 +12,7 @@
     <PackageReference Include="DaFoVectSharp.PDF" Version="3.2.1" />
     <PackageReference Include="DaFoVectSharp.Raster.ImageSharp" Version="2.1.1" />
     <PackageReference Include="DaFoVectSharp.SVG" Version="1.10.3" />
+    <PackageReference Include="Magick.NET-Q8-x64" Version="14.11.1" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />

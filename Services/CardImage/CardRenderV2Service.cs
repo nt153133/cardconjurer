@@ -8,9 +8,17 @@ using Microsoft.Extensions.Options;
 using Serilog;
 using SixLabors.Fonts;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.ColorSpaces.Conversion;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Web.Commands.Converters;
+using VectSharp;
+using Font = SixLabors.Fonts.Font;
+using FontFamily = SixLabors.Fonts.FontFamily;
+using LinearGradientBrush = SixLabors.ImageSharp.Drawing.Processing.LinearGradientBrush;
+using Point = SixLabors.ImageSharp.Point;
+using Rectangle = SixLabors.ImageSharp.Rectangle;
 
 namespace CardConjurer.Services.CardImage;
 
@@ -1475,7 +1483,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
             // 3. Draw the main symbol in the dead center
             ctx.DrawImage(rawSymbol, new Point(padding, padding), 1f);
         });
-
+        
         return styled;
     }
 
