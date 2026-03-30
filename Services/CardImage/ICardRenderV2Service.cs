@@ -11,5 +11,13 @@ public interface ICardRenderV2Service
         string? cardSizeProfileName,
         bool isPrintImage,
         CancellationToken cancellationToken = default);
+
+    Task<CardConjurer.Models.CardImage.RenderV2LayeredResult> RenderLayeredAsync(
+        CardData card,
+        bool preview,
+        int? maxDimension,
+        string? cardSizeProfileName,
+        bool isPrintImage,
+        CancellationToken cancellationToken = default);
 }
 

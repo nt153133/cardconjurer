@@ -606,6 +606,54 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         image.Mutate(ctx => ctx.Crop(new Rectangle(cropX, cropY, cropWidth, cropHeight)));
     }
 
+    private static (int Width, int Height) ResolveCanvasSize(CardData card)
+    {
+        var width = card.Width ?? DefaultWidth;
+        var height = card.Height ?? DefaultHeight;
+
+        if (card.Margins.HasValue && card.Margins.Value)
+        {
+            var withMarginsWidth = (int)Math.Round(width * (1 + 2 * (card.MarginX ?? 0)));
+            var withMarginsHeight = (int)Math.Round(height * (1 + 2 * (card.MarginY ?? 0)));
+            return (withMarginsWidth, withMarginsHeight);
+        }
+
+        return (width, height);
+    }
+
+    private static void ApplyOutputTransforms(
+        Image<Rgba32> outputCanvas,
+        CardData card,
+        bool preview,
+        int? maxDimension,
+        string? cardSizeProfileName,
+        bool isPrintImage)
+    {
+        var profile = ResolveOutputProfile(card, cardSizeProfileName);
+
+        if (isPrintImage)
+        {
+            BleedAdder.AddBleed(outputCanvas, profile);
+        }
+        else
+        {
+            CropToCutSize(outputCanvas, profile.CutSize.Width, profile.CutSize.Height);
+        }
+
+        if (preview)
+        {
+            ResizePreview(outputCanvas, maxDimension ?? 900);
+        }
+    }
+
+    private static async Task<MemoryStream> SavePngStreamAsync(Image<Rgba32> image, CancellationToken cancellationToken)
+    {
+        var output = new MemoryStream();
+        await image.SaveAsPngAsync(output, cancellationToken);
+        output.Seek(0, SeekOrigin.Begin);
+        return output;
+    }
+
     private static Color ParseColor(string? value, Color fallback)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -1325,15 +1373,10 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
 
         Log.Information("Rendering card. Width: {Width}, Height: {Height}, Preview: {Preview}, MaxDimension: {MaxDimension}", card.Width, card.Height, preview, maxDimension);
 
-        var width = card.Width ?? DefaultWidth;
-        var height = card.Height ?? DefaultHeight;
-        var tempW = width;
-        var tempH = height;
-        if (card.Margins.HasValue && card.Margins.Value)
+        var (tempW, tempH) = ResolveCanvasSize(card);
+        if (card.Margins == true)
         {
             Log.Information("Applying margins. MarginX: {MarginX}, MarginY: {MarginY}", card.MarginX, card.MarginY);
-            tempW = (int)Math.Round(width * (1 + 2 * (card.MarginX ?? 0)));
-            tempH = (int)Math.Round(height * (1 + 2 * (card.MarginY ?? 0)));
             Log.Information("Rendering card. Width: {Width}, Height: {Height}", tempW, tempH);
         }
 
@@ -1347,19 +1390,7 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         DrawText(canvas, card);
 
         using var outputCanvas = canvas.Clone();
-        var profile = ResolveOutputProfile(card, cardSizeProfileName);
-
-        if (isPrintImage)
-        {
-            // Match creator server pipeline behavior for print/bleed exports.
-            BleedAdder.AddBleed(outputCanvas, profile);
-        }
-        else
-        {
-            CropToCutSize(outputCanvas, profile.CutSize.Width, profile.CutSize.Height);
-        }
-
-        if (preview) ResizePreview(outputCanvas, maxDimension ?? 900);
+        ApplyOutputTransforms(outputCanvas, card, preview, maxDimension, cardSizeProfileName, isPrintImage);
 
         /*
         if (card.Margins.HasValue && card.Margins.Value)
@@ -1377,13 +1408,48 @@ public sealed class CardRenderV2Service : ICardRenderV2Service
         }
         */
 
-        var output = new MemoryStream();
-        await outputCanvas.SaveAsPngAsync(output, cancellationToken);
-        output.Seek(0, SeekOrigin.Begin);
+        var output = await SavePngStreamAsync(outputCanvas, cancellationToken);
 
         // OPTIMIZATION: Good call keeping this. Releases pooled arrays back to the OS between generations.
         Configuration.Default.MemoryAllocator.ReleaseRetainedResources();
         return output;
+    }
+
+    public async Task<RenderV2LayeredResult> RenderLayeredAsync(
+        CardData card,
+        bool preview,
+        int? maxDimension,
+        string? cardSizeProfileName,
+        bool isPrintImage,
+        CancellationToken cancellationToken = default)
+    {
+        if (card.Width == null || card.Height == null) Log.Error("Card dimensions not specified, using defaults.");
+
+        var (tempW, tempH) = ResolveCanvasSize(card);
+
+        using var artCanvas = new Image<Rgba32>(tempW, tempH);
+        using var frameLayer = new Image<Rgba32>(tempW, tempH);
+        using var textCanvas = new Image<Rgba32>(tempW, tempH);
+
+        await DrawArtAsync(artCanvas, card, cancellationToken);
+        await DrawFramesAsync(frameLayer, card, cancellationToken);
+        artCanvas.Mutate(ctx => ctx.DrawImage(frameLayer, new Point(0, 0), 1f));
+        await DrawSetSymbolAsync(artCanvas, card, cancellationToken);
+
+        // Keep all draw-text output (including inline mana/rules symbols) on the transparent text layer.
+        DrawText(textCanvas, card);
+
+        using var outputArt = artCanvas.Clone();
+        using var outputText = textCanvas.Clone();
+
+        ApplyOutputTransforms(outputArt, card, preview, maxDimension, cardSizeProfileName, isPrintImage);
+        ApplyOutputTransforms(outputText, card, preview, maxDimension, cardSizeProfileName, isPrintImage);
+
+        var artLayerStream = await SavePngStreamAsync(outputArt, cancellationToken);
+        var textLayerStream = await SavePngStreamAsync(outputText, cancellationToken);
+
+        Configuration.Default.MemoryAllocator.ReleaseRetainedResources();
+        return new RenderV2LayeredResult(artLayerStream, textLayerStream);
     }
     
     private Image<Rgba32> StyleMonochromeSymbol(Image<Rgba32> rawSymbol, Color fillColor)
