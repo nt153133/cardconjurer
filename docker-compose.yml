@@ -7,8 +7,8 @@ services:
       - ASPNETCORE_URLS=http://+:8080
     volumes:
       # Large static image assets — read-only, never baked into the image
-      - ./wwwroot/img:/app/wwwroot/img:ro
+      - ./CardConjurer/wwwroot/img:/app/wwwroot/img:ro
       # Local art directory — writable so users can add files on the host
-      - ./wwwroot/local_art:/app/wwwroot/local_art
+      - ./CardConjurer/wwwroot/local_art:/app/wwwroot/local_art
       # Server-side data: saved cards (data/cards) and uploads (data/uploads)
-      - ./data:/app/data
+      - ./CardConjurer/data:/app/data

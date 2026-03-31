@@ -1,10 +1,10 @@
 # syntax = docker/dockerfile:1.2
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-COPY CardConjurer.csproj .
-RUN dotnet restore
+COPY CardConjurer/CardConjurer.csproj CardConjurer/
+RUN dotnet restore CardConjurer/CardConjurer.csproj
 COPY . .
-RUN dotnet publish -c Release -o /app/publish
+RUN dotnet publish CardConjurer/CardConjurer.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS prod
 WORKDIR /app

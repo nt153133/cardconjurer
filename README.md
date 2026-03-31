@@ -14,7 +14,7 @@ This project runs on an ASP.NET Core server (.NET 8.0). The Card Creator page an
 ### Run Locally
 
 ```bash
-dotnet run
+dotnet run --project CardConjurer/CardConjurer.csproj
 ```
 
 The application will start at `http://localhost:5000` by default. Navigate to `/creator` for the Card Creator page.
@@ -96,10 +96,10 @@ Open your browser to `http://localhost:8080/`.
 
 If you're saving a lot of cards custom images you might hit the data limit for uploaded images (about 2MB).
 
-You can avoid this by putting the image files in the `wwwroot/local_art` directory of this repo. Then, when selecting the image in the Art tab of the card creator, instead of uploading the image you can type the file name in the "Via URL" field. This will use the image directly from the `local_art` directory instead of needing to store the whole image in the save file.
+You can avoid this by putting the image files in the `CardConjurer/wwwroot/local_art` directory of this repo. Then, when selecting the image in the Art tab of the card creator, instead of uploading the image you can type the file name in the "Via URL" field. This will use the image directly from the `local_art` directory instead of needing to store the whole image in the save file.
 
 For example if you add the file:
-`wwwroot/local_art/my_art.jpg`
+`CardConjurer/wwwroot/local_art/my_art.jpg`
 
 You can load it in the "Via URL" box by typing:
 `my_art.jpg`

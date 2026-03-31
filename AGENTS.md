@@ -1,9 +1,10 @@
 # AGENTS.md
 
 ## Snapshot
-- `CardConjurer.csproj` is a .NET 8 ASP.NET Core app. `Program.cs` wires Razor Pages plus minimal APIs for assets, cards, card-image rendering, and import normalization.
+- Project root for app code is now `CardConjurer/` (for example `CardConjurer/Program.cs`, `CardConjurer/Pages/Creator.cshtml`, `CardConjurer/wwwroot/js/...`); `CardConjurer.sln` remains at repository root.
+- `CardConjurer/CardConjurer.csproj` is a .NET 8 ASP.NET Core app. `CardConjurer/Program.cs` wires Razor Pages plus minimal APIs for assets, cards, card-image rendering, import normalization, and render-v2.
 - Primary Creator UI flow is `Pages/Creator.cshtml` with hybrid JS ownership: legacy orchestration in `wwwroot/js/creator-23.js` plus extracted domain modules in `wwwroot/js/creator/` (notably `rendering.js`, `validation-service.js`, `text-utilities.js`, `math-utilities.js`).
-- Server-rendering prototype UI is `Pages/RendererV2.cshtml`, backed by `/api/render-v2/*` and `Services/CardImage/CardRenderV2Service.cs`.
+- Server-rendering prototype UI is `Pages/RendererV2.cshtml`, backed by `/api/render-v2/*` and `Services/CardImage/CardRenderV2Service.cs`; print mode (`isPrintImage`) in `POST /api/render-v2/full` uses layered output + `Services/CardImage/PrepressService.cs`.
 - Legacy static-site files still exist at repo root (`index.html`, `css/`, `js/`, etc.) ignore these unless needed for reference.
 
 ## Fast Intent Router (Use First)
@@ -13,6 +14,10 @@
     - `wwwroot/js/creator-23.js`: `downloadCard(...)`, `suppressProfilePlacementOverlay`
     - `wwwroot/js/creator/rendering.js`: `drawCard(...)`
     - `Pages/Creator.cshtml`: download section, `#download-print-image`
+
+- `download all images`, `bulk zip`, `print bleed zip`
+    - `wwwroot/js/creator-23.js`: `bulkDownloadZip(...)`, `bulkDownloadZipWithPrintBleed(...)`
+    - `Pages/Creator.cshtml`: Import/Save actions (`Download All Images`, `Download All Images (Print Bleed)`)
 
 - `margins`, `bleed`, `1/8 margin`, `margin frame`
     - `wwwroot/js/creator-23.js`: `applyMarginFrameSizing(...)`, `resetCardIrregularities(...)`, `getSelectedCardSizeMarginScale(...)`
@@ -44,6 +49,16 @@
     - `Endpoints/RenderV2Endpoints.cs`: `MapRenderV2Endpoints(...)`, `POST /api/render-v2/preview`, `POST /api/render-v2/full`
     - `Services/CardImage/CardRenderV2Service.cs`: `RenderAsync(...)`, `DrawArtAsync(...)`, `DrawFramesAsync(...)`, `DrawText(...)`
 
+- `autoframe`, `automatic frame selection`, `frame style inference`
+    - `wwwroot/js/creator-23.js`: `setAutoFrame(...)`, `autoFrame(...)`
+    - `wwwroot/js/autoFrame/autoFrameLogic.js`: `autoFrame(...)`, `cardFrameProperties(...)`, `ensureAutoFrameHelpersLoaded(...)`
+    - `wwwroot/js/autoFrame/autoFrameVariants.js`, `wwwroot/js/autoFrame/autoFrameHelpers.js`: frame-specific builders
+
+- `prepress`, `print pipeline`, `layered render`
+    - `Endpoints/RenderV2Endpoints.cs`: `POST /api/render-v2/full` print branch
+    - `Services/CardImage/CardRenderV2Service.cs`: `RenderLayeredAsync(...)`
+    - `Services/CardImage/PrepressService.cs`: `ProcessPrintPipelineAsync(...)`
+
 ## Domain Glossary (Canonical Terms)
 - **Cut size**: saved `width` x `height` without margins.
 - **Bleed size**: rendered size with margins (`cut * (1 + 2 * margin)`).
@@ -59,6 +74,8 @@
 - Main Creator orchestration/legacy glue: `wwwroot/js/creator-23.js`
 - Text rendering deep dive: `Card_text_analysis.md`
 - Renderer V2 page + API + service: `Pages/RendererV2.cshtml`, `Endpoints/RenderV2Endpoints.cs`, `Services/CardImage/CardRenderV2Service.cs`
+- Prepress print pipeline staging: `Services/CardImage/IPrepressService.cs`, `Services/CardImage/PrepressService.cs`
+- AutoFrame split modules: `wwwroot/js/autoFrame/autoFrameLogic.js`, `wwwroot/js/autoFrame/autoFrameVariants.js`, `wwwroot/js/autoFrame/autoFrameHelpers.js`
 - Shared layout: `Pages/Shared/_Layout.cshtml`
 - Asset APIs/storage: `Endpoints/AssetEndpoints.cs`, `Services/Assets/FileSystemAssetStorageService.cs`, `Models/Assets/*`
 - Import normalization: `Endpoints/ImportNormalizationEndpoints.cs`, `Services/ImportNormalization/CardImportNormalizationService.cs`, `Models/ImportNormalization/ImportNormalizationContracts.cs`
@@ -95,6 +112,7 @@ Text rendering parity note:
 - Asset uploads are filesystem-backed (`data/uploads`), served via `/user-content`.
 - Art uploads use hash-based duplicate detection (`409`) in `FileSystemAssetStorageService`.
 - `POST /api/cards/prepare-localstorage-upload` preserves raw client card JSON plus normalized import payload.
+- `POST /api/render-v2/full` uses layered rendering + prepress compositing only when `isPrintImage` is true; current export remains a single PNG stream.
 
 ## Project-Specific Conventions
 - Creator remains JS-driven and markup-heavy; prefer placing new domain logic in `wwwroot/js/creator/*.js` modules, keeping `creator-23.js` for orchestration/compatibility unless extraction is out of scope.
@@ -103,16 +121,11 @@ Text rendering parity note:
 - Import normalization style is regex/string transform oriented; match existing style.
 - **Changelog discipline**: every major feature/behavior change/user-visible fix must add one entry in `CHANGELOG.md` in the same PR/commit.
 - **Changelog format**: 1-2 lines per entry under `## Unreleased` -> `Added` / `Changed` / `Fixed`.
-– After ANY correction: update lessons.md
-– Write rules that prevent the same mistake
-– Ruthlessly iterate until mistake rate drops
-– Pause and ask “is there a more elegant way?”
-– Skip this for simple fixes — don’t over-engineer
-- 
+
 ## Local Workflows
 - Primary run path:
 ```powershell
-dotnet run
+dotnet run --project CardConjurer/CardConjurer.csproj
 ```
 • Useful verification:
 dotnet build
@@ -122,5 +135,5 @@ docker compose up -d
 
 Debugging Notes
 • launcher.py is legacy static hosting and does not exercise ASP.NET minimal APIs.
-• wwwroot/local_art/ is a bypass path for large local images and is merged into art-source listing.
+• CardConjurer/wwwroot/local_art/ is a bypass path for large local images and is merged into art-source listing.
 • If asset behavior looks wrong, inspect both storage config in appsettings.json and path/URL normalization in FileSystemAssetStorageService.
