@@ -23,6 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LlamaMagic.Rendering\LlamaMagic.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="js\**" />
     <Compile Remove="img\**" />
     <Compile Remove="creator\**" />

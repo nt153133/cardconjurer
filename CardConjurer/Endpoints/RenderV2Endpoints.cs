@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CardConjurer.Models.CardImage;
 using CardConjurer.Services.CardImage;
+using LlamaMagic.Rendering;
 
 namespace CardConjurer.Endpoints;
 
@@ -12,7 +13,7 @@ public static class RenderV2Endpoints
 
         group.MapPost("/preview", async (
             RenderV2Request request,
-            ICardRenderV2Service renderService,
+            ILlamaRenderService renderService,
             CancellationToken cancellationToken) =>
         {
             if (request.CardJson.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
@@ -38,7 +39,7 @@ public static class RenderV2Endpoints
 
         group.MapPost("/full", async (
             RenderV2Request request,
-            ICardRenderV2Service renderService,
+            ILlamaRenderService renderService,
             IPrepressService prepressService,
             CancellationToken cancellationToken) =>
         {

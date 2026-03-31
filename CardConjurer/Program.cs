@@ -5,6 +5,8 @@ using CardConjurer.Endpoints;
 using CardConjurer.Services.Cards;
 using CardConjurer.Services.CardImage;
 using CardConjurer.Services.ImportNormalization;
+using LlamaMagic.Rendering;
+using LlamaMagic.Rendering.Infrastructure;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Serilog;
@@ -34,8 +36,26 @@ try
     builder.Services.AddSingleton<ICardImageService, CardImageService>();
     builder.Services.AddHttpClient();
     builder.Services.AddMemoryCache();
+
+    // Register EngineConfiguration from app settings + storage config
+    builder.Services.AddSingleton<EngineConfiguration>(sp =>
+    {
+        var env = sp.GetRequiredService<IWebHostEnvironment>();
+        var storageOpts = sp.GetRequiredService<IOptions<AssetStorageOptions>>().Value;
+        var uploadsRootResolved = FileSystemAssetStorageService.ResolveUploadsRoot(storageOpts.UploadsRoot, env.ContentRootPath);
+        var publicBase = FileSystemAssetStorageService.NormalizePublicBasePath(storageOpts.PublicBasePath);
+        var localArt = Path.Combine(env.ContentRootPath, "wwwroot", "local_art");
+        return new EngineConfiguration(
+            WebRootPath: env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"),
+            ContentRootPath: env.ContentRootPath,
+            UploadsRoot: uploadsRootResolved,
+            PublicUploadsBasePath: publicBase,
+            LocalArtRoot: localArt);
+    });
+
+    builder.Services.AddSingleton<IAssetFetcher, WebAssetFetcher>();
     builder.Services.AddSingleton<ISvgRasterizationService, SvgRasterizationService>();
-    builder.Services.AddSingleton<ICardRenderV2Service, CardRenderV2Service>();
+    builder.Services.AddSingleton<ILlamaRenderService, LlamaRenderService>();
     builder.Services.AddSingleton<IPrepressService, PrepressService>();
 
     var app = builder.Build();

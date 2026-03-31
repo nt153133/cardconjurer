@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Globalization;
+using LlamaMagic.Rendering.Models;
 using Serilog;
 
 namespace CardConjurer.Models.CardImage;
@@ -10,7 +11,7 @@ namespace CardConjurer.Models.CardImage;
 /// the browser canvas when downloading or rendering a card image.
 /// All fields are nullable so partial / legacy card saves don't break.
 /// </summary>
-public sealed class CardData
+public sealed class CardData : ICardDefinition
 {
     // ── Canvas / layout ──────────────────────────────────────────────────
     [JsonPropertyName("width")]        public int? Width        { get; init; }
@@ -107,6 +108,12 @@ public sealed class CardData
 
     /// <summary>Gets the title text, or null if the text block is absent.</summary>
     public string? GetTitle()   => TryGetText("title")?.Text;
+
+    // ── Explicit ICardDefinition interface members ───────────────────────
+    IBoundsDefinition? ICardDefinition.SetSymbolBounds => SetSymbolBounds;
+    IEnumerable<IFrameDefinition>? ICardDefinition.Frames => Frames;
+    IDictionary<string, ITextBlockDefinition?>? ICardDefinition.Text =>
+        Text?.ToDictionary(kvp => kvp.Key, kvp => (ITextBlockDefinition?)kvp.Value);
 
     /// <summary>Gets the mana cost string, or null.</summary>
     public string? GetManaCost() => TryGetText("mana")?.Text;
@@ -215,7 +222,7 @@ internal sealed class EmptyStringNullableDoubleConverter : JsonConverter<double?
 }
 
 /// <summary>A single card text box definition.</summary>
-public sealed class CardTextObject
+public sealed class CardTextObject : ITextBlockDefinition
 {
     [JsonPropertyName("text")]       public string? Text       { get; init; }
     [JsonPropertyName("name")]       public string? Name       { get; init; }
@@ -260,7 +267,7 @@ public sealed class CardTextObject
 }
 
 /// <summary>A frame layer applied to the card.</summary>
-public sealed class CardFrame
+public sealed class CardFrame : IFrameDefinition
 {
     [JsonPropertyName("name")]    public string? Name    { get; init; }
     [JsonPropertyName("src")]     public string? Src     { get; init; }
@@ -271,6 +278,11 @@ public sealed class CardFrame
     [JsonPropertyName("masks")]   public List<CardFrameMask>? Masks { get; init; }
     [JsonPropertyName("bounds")]  public CardBounds? Bounds { get; init; }
     [JsonPropertyName("ogBounds")] public CardBounds? OgBounds { get; init; }
+
+    // ── Explicit IFrameDefinition interface members ─────────────────────
+    IBoundsDefinition? IFrameDefinition.Bounds => Bounds;
+    IBoundsDefinition? IFrameDefinition.OgBounds => OgBounds;
+    IEnumerable<IMaskDefinition>? IFrameDefinition.Masks => Masks;
     [JsonPropertyName("stretch")] public List<CardFrameStretch>? Stretch { get; init; }
     // complementary can be a number, string, or array depending on the frame pack.
     [JsonPropertyName("complementary")] public JsonElement? Complementary { get; init; }
@@ -283,7 +295,7 @@ public sealed class CardFrame
 }
 
 /// <summary>A mask applied to a frame layer.</summary>
-public sealed class CardFrameMask
+public sealed class CardFrameMask : IMaskDefinition
 {
     [JsonPropertyName("name")] public string? Name { get; init; }
     [JsonPropertyName("src")]  public string? Src  { get; init; }
@@ -315,16 +327,20 @@ public sealed class CardFrameStretch
 }
 
 /// <summary>Generic x/y/width/height bounds, all normalised 0–1 relative to card size.</summary>
-public sealed class CardBounds
+public sealed class CardBounds : IBoundsDefinition
 {
     [JsonPropertyName("x")]      public double? X      { get; init; }
     [JsonPropertyName("y")]      public double? Y      { get; init; }
     [JsonPropertyName("width")]  public double? Width  { get; init; }
     [JsonPropertyName("height")] public double? Height { get; init; }
+
+    // IBoundsDefinition members not present on CardBounds
+    string? IBoundsDefinition.Horizontal => null;
+    string? IBoundsDefinition.Vertical => null;
 }
 
 /// <summary>Bounds with optional alignment hints used for set symbols.</summary>
-public sealed class CardSymbolBounds
+public sealed class CardSymbolBounds : IBoundsDefinition
 {
     [JsonPropertyName("x")]          public double? X          { get; init; }
     [JsonPropertyName("y")]          public double? Y          { get; init; }

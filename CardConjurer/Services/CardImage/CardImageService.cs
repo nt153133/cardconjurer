@@ -1,5 +1,5 @@
 using CardConjurer.Models.CardImage;
-using CardConjurer.Models.CardImage.Sizing;
+using LlamaMagic.Rendering.Sizing;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
