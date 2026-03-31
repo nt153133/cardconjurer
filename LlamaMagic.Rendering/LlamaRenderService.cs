@@ -7,6 +7,7 @@ using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.ColorSpaces.Conversion;
 using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using Font = SixLabors.Fonts.Font;
@@ -629,6 +630,12 @@ public sealed class LlamaRenderService : ILlamaRenderService
         if (preview)
         {
             ResizePreview(outputCanvas, maxDimension ?? 900);
+        }
+        else
+        {
+            outputCanvas.Metadata.ResolutionUnits = PixelResolutionUnit.PixelsPerInch;
+            outputCanvas.Metadata.HorizontalResolution = profile.Dpi;
+            outputCanvas.Metadata.VerticalResolution = profile.Dpi;
         }
     }
 

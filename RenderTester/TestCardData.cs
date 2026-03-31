@@ -1,0 +1,358 @@
+﻿using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LlamaMagic.Rendering.Models;
+using Serilog;
+
+namespace RenderTester;
+
+/// <summary>
+/// Deserialised representation of the JavaScript <c>card</c> object sent from
+/// the browser canvas when downloading or rendering a card image.
+/// All fields are nullable so partial / legacy card saves don't break.
+/// </summary>
+public sealed class TestCardData : ICardDefinition
+{
+    // ── Canvas / layout ──────────────────────────────────────────────────
+    [JsonPropertyName("width")]        public int? Width        { get; init; }
+    [JsonPropertyName("height")]       public int? Height       { get; init; }
+    [JsonPropertyName("marginX")]      public double? MarginX   { get; init; }
+    [JsonPropertyName("marginY")]      public double? MarginY   { get; init; }
+    [JsonPropertyName("version")]      public string? Version   { get; init; }
+    [JsonPropertyName("noCorners")]    public bool? NoCorners   { get; init; }
+    [JsonPropertyName("landscape")]    public bool? Landscape   { get; init; }
+
+    // ── Art ──────────────────────────────────────────────────────────────
+    [JsonPropertyName("artSource")]    public string? ArtSource { get; init; }
+    [JsonPropertyName("artX")]         public double? ArtX      { get; init; }
+    [JsonPropertyName("artY")]         public double? ArtY      { get; init; }
+    [JsonPropertyName("artZoom")]      public double? ArtZoom   { get; init; }
+    [JsonPropertyName("artRotate")]    public double? ArtRotate { get; init; }
+    [JsonPropertyName("artBounds")]    public CardBounds? ArtBounds { get; init; }
+
+    // ── Set symbol ───────────────────────────────────────────────────────
+    [JsonPropertyName("setSymbolSource")] public string? SetSymbolSource { get; init; }
+    [JsonPropertyName("setSymbolX")]      public double? SetSymbolX      { get; init; }
+    [JsonPropertyName("setSymbolY")]      public double? SetSymbolY      { get; init; }
+    [JsonPropertyName("setSymbolZoom")]   public double? SetSymbolZoom   { get; init; }
+    [JsonPropertyName("setSymbolBounds")] public CardSymbolBounds? SetSymbolBounds { get; init; }
+
+    // ── Watermark ────────────────────────────────────────────────────────
+    [JsonPropertyName("watermarkSource")]  public string? WatermarkSource  { get; init; }
+    [JsonPropertyName("watermarkX")]       public double? WatermarkX       { get; init; }
+    [JsonPropertyName("watermarkY")]       public double? WatermarkY       { get; init; }
+    [JsonPropertyName("watermarkZoom")]    public double? WatermarkZoom    { get; init; }
+    [JsonPropertyName("watermarkLeft")]    public string? WatermarkLeft    { get; init; }
+    [JsonPropertyName("watermarkRight")]   public string? WatermarkRight   { get; init; }
+    [JsonPropertyName("watermarkOpacity")] public double? WatermarkOpacity { get; init; }
+    [JsonPropertyName("watermarkBounds")]  public CardBounds? WatermarkBounds { get; init; }
+
+    // ── Collector / bottom info ──────────────────────────────────────────
+    [JsonPropertyName("infoArtist")]   public string? InfoArtist   { get; init; }
+    [JsonPropertyName("infoNumber")]   public string? InfoNumber   { get; init; }
+    [JsonPropertyName("infoRarity")]   public string? InfoRarity   { get; init; }
+    [JsonPropertyName("infoSet")]      public string? InfoSet      { get; init; }
+    [JsonPropertyName("infoLanguage")] public string? InfoLanguage { get; init; }
+    [JsonPropertyName("infoNote")]     public string? InfoNote     { get; init; }
+    [JsonPropertyName("infoYear")]     public int?    InfoYear     { get; init; }
+
+    // ── Text boxes ───────────────────────────────────────────────────────
+    /// <summary>
+    /// Dictionary keyed by text-box name (e.g. "title", "mana", "rules", "type", "pt").
+    /// Use <see cref="CardTextObject"/> for typed access.
+    /// </summary>
+    [JsonPropertyName("text")]
+    public Dictionary<string, CardTextObject?>? Text { get; init; }
+
+    // ── Frames ───────────────────────────────────────────────────────────
+    [JsonPropertyName("frames")]       public List<CardFrame>? Frames       { get; init; }
+    [JsonPropertyName("manaSymbols")]  public List<string>?    ManaSymbols  { get; init; }
+    [JsonPropertyName("onload")]       public string?          Onload       { get; init; }
+
+    // ── Serial number ────────────────────────────────────────────────────
+    [JsonPropertyName("serialNumber")] public string? SerialNumber { get; init; }
+    [JsonPropertyName("serialTotal")]  public string? SerialTotal  { get; init; }
+    // Legacy creator saves can emit empty strings for serial numeric fields.
+    [JsonConverter(typeof(EmptyStringNullableDoubleConverter))]
+    [JsonPropertyName("serialX")]      public double? SerialX      { get; init; }
+    [JsonConverter(typeof(EmptyStringNullableDoubleConverter))]
+    [JsonPropertyName("serialY")]      public double? SerialY      { get; init; }
+    [JsonConverter(typeof(EmptyStringNullableDoubleConverter))]
+    [JsonPropertyName("serialScale")]  public double? SerialScale  { get; init; }
+
+    // ── Bottom info layout ───────────────────────────────────────────────
+    // bottomInfo is a keyed object on the JS side (e.g. {midLeft:{...}}),
+    // so accept it as a raw JsonElement rather than List<JsonElement>.
+    [JsonPropertyName("bottomInfo")]          public JsonElement? BottomInfo              { get; init; }
+    [JsonPropertyName("bottomInfoTranslate")] public CardPoint? BottomInfoTranslate       { get; init; }
+    [JsonPropertyName("bottomInfoRotate")]    public double? BottomInfoRotate              { get; init; }
+    [JsonPropertyName("bottomInfoZoom")]      public double? BottomInfoZoom               { get; init; }
+    [JsonPropertyName("bottomInfoColor")]     public string? BottomInfoColor              { get; init; }
+    [JsonPropertyName("hideBottomInfoBorder")] public bool? HideBottomInfoBorder          { get; init; }
+
+    // ── Misc rendering flags ─────────────────────────────────────────────
+    [JsonPropertyName("showsFlavorBar")]     public bool? ShowsFlavorBar    { get; init; }
+    [JsonPropertyName("margins")]            public bool? Margins           { get; init; }
+
+    // ── Version-specific payloads ────────────────────────────────────────
+    // These structures vary by frame/version script. Keep them raw until
+    // Render V2 needs typed access to their inner members.
+    [JsonPropertyName("planeswalker")]       public JsonElement? Planeswalker { get; init; }
+    [JsonPropertyName("dungeon")]            public JsonElement? Dungeon      { get; init; }
+    [JsonPropertyName("qrCode")]             public JsonElement? QrCode       { get; init; }
+    [JsonPropertyName("station")]            public JsonElement? Station      { get; init; }
+    [JsonPropertyName("saga")]               public JsonElement? Saga         { get; init; }
+    [JsonPropertyName("class")]              public JsonElement? Class        { get; init; }
+
+    // ── Convenience helpers ──────────────────────────────────────────────
+
+    /// <summary>Gets the title text, or null if the text block is absent.</summary>
+    public string? GetTitle()   => TryGetText("title")?.Text;
+
+    // ── Explicit ICardDefinition interface members ───────────────────────
+    IBoundsDefinition? ICardDefinition.SetSymbolBounds => SetSymbolBounds;
+    IEnumerable<IFrameDefinition>? ICardDefinition.Frames => Frames;
+    IDictionary<string, ITextBlockDefinition?>? ICardDefinition.Text =>
+        Text?.ToDictionary(kvp => kvp.Key, kvp => (ITextBlockDefinition?)kvp.Value);
+
+    /// <summary>Gets the mana cost string, or null.</summary>
+    public string? GetManaCost() => TryGetText("mana")?.Text;
+
+    /// <summary>Gets the type line, or null.</summary>
+    public string? GetTypeLine() => TryGetText("type")?.Text;
+
+    /// <summary>Gets the rules text, or null.</summary>
+    public string? GetRulesText() => TryGetText("rules")?.Text;
+
+    /// <summary>Gets the P/T string, or null.</summary>
+    public string? GetPowerToughness() => TryGetText("pt")?.Text;
+
+    private CardTextObject? TryGetText(string key) =>
+        Text is not null && Text.TryGetValue(key, out var t) ? t : null;
+
+    /// <summary>
+    /// Deserializes card data from a raw JSON string (e.g. from PNG iTXt metadata).
+    /// Returns null if the string is null/empty or cannot be parsed.
+    /// </summary>
+    public static TestCardData? FromJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<TestCardData>(json, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Deserializes card data from an already-parsed <see cref="JsonElement"/>.
+    /// </summary>
+    public static TestCardData? FromJsonElement(JsonElement element)
+    {
+        if (element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return null;
+        try
+        {
+            return element.Deserialize<TestCardData>(JsonOptions);
+        }
+        catch (JsonException e)
+        {
+            Log.Error("Error deserializing CardData from JsonElement: {0}", element);
+            Log.Error("Exception: {0}", e);
+            return null;
+        }
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        // JS cards sometimes encode numbers as strings (e.g. artRotate:"0", infoYear:"2026").
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+    };
+}
+
+internal sealed class EmptyStringNullableDoubleConverter : JsonConverter<double?>
+{
+    public override double? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            return reader.GetDouble();
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var s = reader.GetString();
+            if (string.IsNullOrWhiteSpace(s))
+            {
+                return null;
+            }
+
+            if (double.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var value))
+            {
+                return value;
+            }
+
+            throw new JsonException($"Could not parse '{s}' as a double.");
+        }
+
+        throw new JsonException($"Unexpected token {reader.TokenType} when parsing nullable double.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, double? value, JsonSerializerOptions options)
+    {
+        if (value.HasValue)
+        {
+            writer.WriteNumberValue(value.Value);
+            return;
+        }
+
+        writer.WriteNullValue();
+    }
+}
+
+/// <summary>A single card text box definition.</summary>
+public sealed class CardTextObject : ITextBlockDefinition
+{
+    [JsonPropertyName("text")]       public string? Text       { get; init; }
+    [JsonPropertyName("name")]       public string? Name       { get; init; }
+    [JsonPropertyName("font")]       public string? Font       { get; init; }
+    [JsonPropertyName("fontStyle")]  public string? FontStyle  { get; init; }
+    [JsonConverter(typeof(EmptyStringNullableDoubleConverter))]
+    [JsonPropertyName("fontSize")]   public double? FontSize   { get; init; }
+    [JsonPropertyName("color")]      public string? Color      { get; init; }
+    [JsonPropertyName("x")]          public double? X          { get; init; }
+    [JsonPropertyName("y")]          public double? Y          { get; init; }
+    [JsonPropertyName("width")]      public double? Width      { get; init; }
+    [JsonPropertyName("height")]     public double? Height     { get; init; }
+    [JsonPropertyName("size")]       public double? Size       { get; init; }
+    [JsonPropertyName("align")]      public string? Align      { get; init; }
+    [JsonPropertyName("justify")]    public string? Justify    { get; init; }
+    [JsonPropertyName("oneLine")]    public bool?   OneLine    { get; init; }
+    [JsonPropertyName("manaCost")]   public bool?   ManaCost   { get; init; }
+    [JsonPropertyName("manaPrefix")] public string? ManaPrefix { get; init; }
+    [JsonPropertyName("manaSymbolColor")] public string? ManaSymbolColor { get; init; }
+    [JsonPropertyName("conditionalColor")] public string? ConditionalColor { get; init; }
+    [JsonPropertyName("vertical")]   public bool?   Vertical   { get; init; }
+    [JsonPropertyName("allCaps")]    public bool?   AllCaps    { get; init; }
+    [JsonPropertyName("bounded")]    public bool?   Bounded    { get; init; }
+    [JsonPropertyName("shadow")]     public string? Shadow     { get; init; }
+    [JsonPropertyName("shadowX")]    public double? ShadowX    { get; init; }
+    [JsonPropertyName("shadowY")]    public double? ShadowY    { get; init; }
+    [JsonPropertyName("shadowBlur")] public double? ShadowBlur { get; init; }
+    [JsonPropertyName("rotation")]   public double? Rotation   { get; init; }
+    [JsonPropertyName("kerning")]    public double? Kerning    { get; init; }
+    [JsonPropertyName("lineSpacing")] public double? LineSpacing { get; init; }
+    [JsonPropertyName("outlineColor")] public string? OutlineColor { get; init; }
+    [JsonPropertyName("outlineWidth")] public double? OutlineWidth { get; init; }
+    [JsonPropertyName("lineCap")]    public string? LineCap    { get; init; }
+    [JsonPropertyName("lineJoin")]   public string? LineJoin   { get; init; }
+    [JsonPropertyName("arcRadius")]  public double? ArcRadius  { get; init; }
+    [JsonPropertyName("arcStart")]   public double? ArcStart   { get; init; }
+    [JsonPropertyName("manaSpacing")] public double? ManaSpacing { get; init; }
+    [JsonPropertyName("manaImageScale")] public double? ManaImageScale { get; init; }
+    [JsonPropertyName("manaPlacement")] public CardTextManaPlacement? ManaPlacement { get; init; }
+    [JsonPropertyName("manaLayout")] public List<CardTextManaLayout>? ManaLayout { get; init; }
+    [JsonPropertyName("noVerticalCenter")]  public bool?  NoVerticalCenter  { get; init; }
+}
+
+/// <summary>A frame layer applied to the card.</summary>
+public sealed class CardFrame : IFrameDefinition
+{
+    [JsonPropertyName("name")]    public string? Name    { get; init; }
+    [JsonPropertyName("src")]     public string? Src     { get; init; }
+    [JsonPropertyName("noThumb")] public bool?   NoThumb { get; init; }
+    [JsonPropertyName("noDefaultMask")] public bool? NoDefaultMask { get; init; }
+    [JsonPropertyName("erase")]   public bool?   Erase   { get; init; }
+    [JsonPropertyName("opacity")] public double? Opacity { get; init; }
+    [JsonPropertyName("masks")]   public List<CardFrameMask>? Masks { get; init; }
+    [JsonPropertyName("bounds")]  public CardBounds? Bounds { get; init; }
+    [JsonPropertyName("ogBounds")] public CardBounds? OgBounds { get; init; }
+
+    // ── Explicit IFrameDefinition interface members ─────────────────────
+    IBoundsDefinition? IFrameDefinition.Bounds => Bounds;
+    IBoundsDefinition? IFrameDefinition.OgBounds => OgBounds;
+    IEnumerable<IMaskDefinition>? IFrameDefinition.Masks => Masks;
+    [JsonPropertyName("stretch")] public List<CardFrameStretch>? Stretch { get; init; }
+    // complementary can be a number, string, or array depending on the frame pack.
+    [JsonPropertyName("complementary")] public JsonElement? Complementary { get; init; }
+    [JsonPropertyName("hslHue")]        public double? HslHue        { get; init; }
+    [JsonPropertyName("hslSaturation")] public double? HslSaturation { get; init; }
+    [JsonPropertyName("hslLightness")]  public double? HslLightness  { get; init; }
+    [JsonPropertyName("colorOverlay")]      public string? ColorOverlay      { get; init; }
+    [JsonPropertyName("colorOverlayCheck")] public bool?   ColorOverlayCheck { get; init; }
+    [JsonPropertyName("preserveAlpha")]     public bool?   PreserveAlpha     { get; init; }
+}
+
+/// <summary>A mask applied to a frame layer.</summary>
+public sealed class CardFrameMask : IMaskDefinition
+{
+    [JsonPropertyName("name")] public string? Name { get; init; }
+    [JsonPropertyName("src")]  public string? Src  { get; init; }
+    [JsonPropertyName("preserveAlpha")] public bool? PreserveAlpha { get; init; }
+    [JsonPropertyName("bounds")] public CardBounds? Bounds { get; init; }
+}
+
+/// <summary>Manual mana symbol placement arrays used by vertical/special layouts.</summary>
+public sealed class CardTextManaPlacement
+{
+    [JsonPropertyName("x")] public List<double>? X { get; init; }
+    [JsonPropertyName("y")] public List<double>? Y { get; init; }
+}
+
+/// <summary>One mana-layout breakpoint describing symbol count, scale, and positions.</summary>
+public sealed class CardTextManaLayout
+{
+    [JsonPropertyName("max")] public int? Max { get; init; }
+    [JsonPropertyName("size")] public double? Size { get; init; }
+    [JsonPropertyName("pos")] public List<double[]>? Pos { get; init; }
+}
+
+/// <summary>SVG stretch transform descriptor used by vector frame packs.</summary>
+public sealed class CardFrameStretch
+{
+    [JsonPropertyName("name")] public string? Name { get; init; }
+    [JsonPropertyName("targets")] public List<int>? Targets { get; init; }
+    [JsonPropertyName("change")] public List<double>? Change { get; init; }
+}
+
+/// <summary>Generic x/y/width/height bounds, all normalised 0–1 relative to card size.</summary>
+public sealed class CardBounds : IBoundsDefinition
+{
+    [JsonPropertyName("x")]      public double? X      { get; init; }
+    [JsonPropertyName("y")]      public double? Y      { get; init; }
+    [JsonPropertyName("width")]  public double? Width  { get; init; }
+    [JsonPropertyName("height")] public double? Height { get; init; }
+
+    // IBoundsDefinition members not present on CardBounds
+    string? IBoundsDefinition.Horizontal => null;
+    string? IBoundsDefinition.Vertical => null;
+}
+
+/// <summary>Bounds with optional alignment hints used for set symbols.</summary>
+public sealed class CardSymbolBounds : IBoundsDefinition
+{
+    [JsonPropertyName("x")]          public double? X          { get; init; }
+    [JsonPropertyName("y")]          public double? Y          { get; init; }
+    [JsonPropertyName("width")]      public double? Width      { get; init; }
+    [JsonPropertyName("height")]     public double? Height     { get; init; }
+    [JsonPropertyName("horizontal")] public string? Horizontal { get; init; }
+    [JsonPropertyName("vertical")]   public string? Vertical   { get; init; }
+}
+
+/// <summary>A simple x/y coordinate pair.</summary>
+public sealed class CardPoint
+{
+    [JsonPropertyName("x")] public double? X { get; init; }
+    [JsonPropertyName("y")] public double? Y { get; init; }
+}
