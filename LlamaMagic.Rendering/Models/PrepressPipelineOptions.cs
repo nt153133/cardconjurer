@@ -1,4 +1,4 @@
-namespace CardConjurer.Models.CardImage;
+namespace LlamaMagic.Rendering.Models;
 
 public sealed class PrepressPipelineOptions
 {

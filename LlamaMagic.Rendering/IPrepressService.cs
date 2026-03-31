@@ -1,6 +1,6 @@
-using CardConjurer.Models.CardImage;
+using LlamaMagic.Rendering.Models;
 
-namespace CardConjurer.Services.CardImage;
+namespace LlamaMagic.Rendering;
 
 public interface IPrepressService
 {
@@ -10,4 +10,3 @@ public interface IPrepressService
         PrepressPipelineOptions options,
         CancellationToken cancellationToken = default);
 }
-

@@ -1,10 +1,10 @@
-using CardConjurer.Models.CardImage;
+using LlamaMagic.Rendering.Models;
 using ImageMagick;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace CardConjurer.Services.CardImage;
+namespace LlamaMagic.Rendering;
 
 public sealed class PrepressService : IPrepressService
 {

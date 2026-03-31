@@ -1,7 +1,7 @@
 using System.Text.Json;
 using CardConjurer.Models.CardImage;
-using CardConjurer.Services.CardImage;
 using LlamaMagic.Rendering;
+using LlamaMagic.Rendering.Models;
 
 namespace CardConjurer.Endpoints;
 
