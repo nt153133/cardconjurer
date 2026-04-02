@@ -1,4 +1,5 @@
 using LlamaMagic.Rendering.Models;
+using LlamaMagic.Rendering.Sizing;
 
 namespace LlamaMagic.Rendering;
 
@@ -19,4 +20,6 @@ public interface ILlamaRenderService
         string? cardSizeProfileName,
         bool isPrintImage,
         CancellationToken cancellationToken = default);
+
+
 }

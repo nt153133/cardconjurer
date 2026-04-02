@@ -571,7 +571,7 @@ public sealed class LlamaRenderService : ILlamaRenderService
         canvas.Mutate(ctx => ctx.Resize(width, height, KnownResamplers.Lanczos3));
     }
 
-    private static CardSizeProfile ResolveOutputProfile(ICardDefinition card, string? cardSizeProfileName)
+    public static CardSizeProfile ResolveOutputProfile(ICardDefinition card, string? cardSizeProfileName)
     {
         if (CardSizeCatalog.TryGetByName(cardSizeProfileName, out var explicitProfile))
         {
@@ -620,7 +620,7 @@ public sealed class LlamaRenderService : ILlamaRenderService
 
         if (isPrintImage)
         {
-            BleedAdder.AddBleed(outputCanvas, profile);
+            //BleedAdder.AddBleed(outputCanvas, profile);
         }
         else
         {
@@ -1008,11 +1008,21 @@ public sealed class LlamaRenderService : ILlamaRenderService
                                 state.CurrentY += maxLineHeight;
                             }
 
-                            var barWidth = maxWidth * 0.93f;
-                            var barHeight = fontSize * 0.5f;
-
+                            //var barWidth = maxWidth * 0.93f;
+                            //var barHeight = fontSize * 0.5f;
+                            
+                            
+                            var barWidth = (int)(maxWidth * 0.96); 
+                            var barHeight = ScaleHeight(0.03, card.Height ?? DefaultHeight); 
+                            var barX = (maxWidth - barWidth) / 2; 
+                            float symbolY = padding + (state.FontSize * 0.34f) - (barHeight / 2f);
                             if (!measureOnly && lineLayer != null)
                             {
+                                var drawSymbol = _svgService.GetManaSymbol(tag.Code, barWidth,barHeight);
+                                lineLayer.Mutate(ctx => ctx.DrawImage(drawSymbol, new Point((int)barX, (int)symbolY), 1f));
+                                
+                                
+                                /*
                                 // Shift the bar down/right by the padding amount
                                 var barRect = new RectangleF(padding + (maxWidth - barWidth) / 2f, padding + barHeight / 2f, barWidth, ScaleHeight(0.002, card.Height ?? DefaultHeight));
 
@@ -1026,11 +1036,12 @@ public sealed class LlamaRenderService : ILlamaRenderService
 
                                 var brush = new LinearGradientBrush(new PointF(barRect.Left, 0), new PointF(barRect.Right, 0), GradientRepetitionMode.None, colors);
                                 lineLayer.Mutate(ctx => ctx.Fill(brush, barRect));
+                                */
                             }
 
                             state.CurrentX = 99999;
-                            maxLineHeight = barHeight;
-                            state.AddLineSpacing += maxLineHeight;
+                            maxLineHeight = barHeight * 0.75f;
+                            //state.AddLineSpacing += maxLineHeight;
                         }
                         else
                         {
@@ -1164,6 +1175,7 @@ public sealed class LlamaRenderService : ILlamaRenderService
 
             // Make the image larger to hold the padding
             using var textLayer = new Image<Rgba32>(width + padding * 2, height + padding * 2);
+            textLayer.Mutate(ctx => ctx.Clear(Color.Transparent));
             MeasureAndDrawTokens(textLayer, tokens, currentFontSize, width, alignment, false, textBlock, card, padding,fontSized);
 
             // --- VERTICAL CENTERING ---
@@ -1412,6 +1424,9 @@ public sealed class LlamaRenderService : ILlamaRenderService
         using var artCanvas = new Image<Rgba32>(tempW, tempH);
         using var frameLayer = new Image<Rgba32>(tempW, tempH);
         using var textCanvas = new Image<Rgba32>(tempW, tempH);
+        textCanvas.Mutate(ctx => ctx.Clear(Color.Transparent)); // Start with a fully transparent text layer
+        textCanvas.Mutate(x=> x.BackgroundColor(Color.Transparent)); // Ensure the text layer is fully transparent
+        textCanvas.SaveAsTiff("first_textLayer.tiff");
 
         await DrawArtAsync(artCanvas, card, cancellationToken);
         await DrawFramesAsync(frameLayer, card, cancellationToken);
@@ -1421,12 +1436,16 @@ public sealed class LlamaRenderService : ILlamaRenderService
         // Keep all draw-text output (including inline mana/rules symbols) on the transparent text layer.
         DrawText(textCanvas, card);
 
+        // Debug output to verify transparency and content of text layer
+        
         using var outputArt = artCanvas.Clone();
         using var outputText = textCanvas.Clone();
+        
 
         ApplyOutputTransforms(outputArt, card, preview, maxDimension, cardSizeProfileName, isPrintImage);
-        ApplyOutputTransforms(outputText, card, preview, maxDimension, cardSizeProfileName, isPrintImage);
-
+//        ApplyOutputTransforms(outputText, card, preview, maxDimension, cardSizeProfileName, isPrintImage);
+        outputText.Mutate(x=> x.BackgroundColor(Color.Transparent)); // Temporarily fill with white to visualize text layer content
+        outputText.SaveAsPng("debug_textLayer.png"); // Save the text layer for
         var artLayerStream = await SavePngStreamAsync(outputArt, cancellationToken);
         var textLayerStream = await SavePngStreamAsync(outputText, cancellationToken);
 

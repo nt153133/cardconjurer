@@ -2,6 +2,7 @@ using System.Text.Json;
 using CardConjurer.Models.CardImage;
 using LlamaMagic.Rendering;
 using LlamaMagic.Rendering.Models;
+using LlamaMagic.Rendering.Sizing;
 
 namespace CardConjurer.Endpoints;
 
@@ -64,15 +65,16 @@ public static class RenderV2Endpoints
                     request.IsPrintImage,
                     cancellationToken);
 
+                CardSizeCatalog.TryGetByName(request.CardSizeProfileName, out var explicitProfile);
                 using (layered.ArtLayerStream)
                 using (layered.TextLayerStream)
                 {
                     var composited = await prepressService.ProcessPrintPipelineAsync(
                         layered.ArtLayerStream,
                         layered.TextLayerStream,
-                        new PrepressPipelineOptions(),
+                        new PrepressPipelineOptions(){CardDimensions = explicitProfile},
                         cancellationToken);
-                    return Results.Stream(composited, "image/png", fileDownloadName: "renderer-v2.png");
+                    return Results.Stream(composited, "image/tiff", fileDownloadName: "renderer-v2.tiff");
                 }
             }
 

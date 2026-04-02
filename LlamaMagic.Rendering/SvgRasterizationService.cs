@@ -8,7 +8,6 @@ using SixLabors.ImageSharp.Processing;
 using VectSharp;
 using VectSharp.Raster.ImageSharp;
 using VectSharp.SVG;
-
 using LlamaMagic.Rendering.Infrastructure;
 
 namespace LlamaMagic.Rendering;
@@ -147,6 +146,95 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
         }
     }
 
+    public Image<Rgba32>? GetManaSymbol(string tagCode, int targetWidth, int targetHeight)
+    {
+        if (string.IsNullOrWhiteSpace(tagCode))
+            return null;
+
+        // Step 1: Clean the tag — strip slashes, lowercase
+        var cleanTag = tagCode.Replace("/", "").ToLowerInvariant();
+        var reversedTag = Reverse(cleanTag);
+
+        // Step 2: Resolve the symbol key (file index key that exists on disk)
+        var symbolKey = ResolveSymbolKey(cleanTag, reversedTag, null);
+        if (symbolKey is null)
+            return null;
+
+        // Step 3: Build the Tier 2 cache key
+        var rasterKey = $"mana_{symbolKey}_{targetWidth}x{targetHeight}";
+
+        // Step 4: Try Tier 2 cache (fast path)
+        if (_rasterCache.TryGetValue(rasterKey, out Image<Rgba32>? cached) && cached is not null)
+        {
+            return cached.Clone();
+        }
+
+        // Step 5: Acquire per-key lock to prevent duplicate rasterization
+        var rasterLock = _rasterLocks.GetOrAdd(rasterKey, _ => new SemaphoreSlim(1, 1));
+        rasterLock.Wait();
+        try
+        {
+            // Double-check after acquiring lock
+            if (_rasterCache.TryGetValue(rasterKey, out cached) && cached is not null)
+            {
+                return cached.Clone();
+            }
+
+            // Step 6 & 7: Rasterize or Resize based on file type
+            Image<Rgba32> rasterized;
+            var filePath = _symbolIndex[symbolKey];
+
+            if (filePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+            {
+                var page = GetOrLoadPage(symbolKey);
+                if (page is null) return null;
+
+                var scaleX = targetWidth / page.Width;
+                var scaleY = targetHeight / page.Height;
+
+                page.Width = targetWidth;
+                page.Height = targetHeight;
+                page.Graphics.Scale(scaleX, scaleY);
+
+                rasterized = page.SaveAsImage(1);
+            }
+            else
+            {
+                // It's a PNG! Load directly from disk.
+                // We don't use Tier 1 caching for raw ImageSharp images to prevent unmanaged memory leaks.
+                // The OS disk cache makes loading tiny PNGs instantaneous anyway.
+                using var rawImage = Image.Load<Rgba32>(filePath);
+
+                //var scale = (double)targetSize / Math.Max(rawImage.Width, rawImage.Height);
+                int newW = targetWidth;
+                int newH = targetHeight;
+                rasterized = rawImage.Clone(ctx => ctx.Resize(newW, newH, KnownResamplers.Lanczos3));
+            }
+
+
+            // Step 8: Store in Tier 2 cache with eviction callback to dispose
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetSlidingExpiration(RasterCacheSlidingExpiration)
+                .RegisterPostEvictionCallback(static (key, value, reason, _) =>
+                {
+                    if (value is IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                        Log.Debug("Disposed evicted mana symbol raster cache entry: {Key} (reason: {Reason})", key, reason);
+                    }
+                });
+
+            _rasterCache.Set(rasterKey, rasterized, cacheOptions);
+
+            // Step 9: Return a clone — the cache owns the original
+            return rasterized.Clone();
+        }
+        finally
+        {
+            rasterLock.Release();
+        }
+    }
+
     // ═════════════════════════════════════════════════════════════════════
     //  Responsibility 2: Full Frame Rasterization (no caching)
     // ═════════════════════════════════════════════════════════════════════
@@ -227,13 +315,13 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
                 try
                 {
                     Log.Information("Rasterizing SVG frame: {Path} at target {W}x{H} with scale {Scale}", absoluteFilePath, targetWidth, targetHeight, scale);
-                    var img= page.SaveAsImage(scale);
+                    var img = page.SaveAsImage(scale);
                     if (img == null)
                     {
                         Log.Error("VectSharp failed to rasterize SVG frame: {Path} at scale {Scale}", absoluteFilePath, scale);
-                        Log.Information($"{page.Graphics.TryRasterise(page.Graphics.GetBounds(),1,true, out var debugImg)}");
-                        
+                        Log.Information($"{page.Graphics.TryRasterise(page.Graphics.GetBounds(), 1, true, out var debugImg)}");
                     }
+
                     return img;
                 }
                 catch (Exception ex)
@@ -246,6 +334,47 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
         finally
         {
             _frameGate.Release();
+        }
+    }
+
+    public Image<Rgba32>? GetVectorSymbol(string symbolKey, int targetWidth, int targetHeight)
+    {
+        // 1. Resolve the file path from the index
+        if (!_symbolIndex.TryGetValue(symbolKey, out var filePath))
+        {
+            Log.Error("Symbol key not found in index for styled vector symbol: {SymbolKey}", symbolKey);
+            return null;
+        }
+
+        if (!filePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warning("Attempted to vector-style a non-SVG symbol: {FilePath}", filePath);
+            return null;
+        }
+
+        string svgContent = File.ReadAllText(filePath);
+        try
+        {
+            // 2. Load the raw SVG text directly from disk (bypassing the Tier 1 cache)
+
+
+            // 5. Parse the manipulated SVG string into a VectSharp Page
+            Page page = Parser.FromString(svgContent);
+
+            page.Width = targetWidth;
+            page.Height = targetHeight;
+
+            page.Graphics.Scale(targetWidth / page.Width, targetHeight / page.Height);
+
+
+            // No ImageSharp manipulation happens here—it's exported perfectly from the vector engine!
+            return page.SaveAsImage(1);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to create styled vector symbol for {SymbolKey}", symbolKey);
+            Log.Information(svgContent);
+            return null;
         }
     }
 
@@ -263,11 +392,12 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
             Log.Warning("Attempted to vector-style a non-SVG symbol: {FilePath}", filePath);
             return null;
         }
+
         string svgContent = File.ReadAllText(filePath);
         try
         {
             // 2. Load the raw SVG text directly from disk (bypassing the Tier 1 cache)
-            
+
 
             // 3. Extract ImageSharp Color values
             var fgPixel = foregroundColor.ToPixel<Rgba32>();
@@ -309,8 +439,7 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
     //  Private Helpers
     // ═════════════════════════════════════════════════════════════════════
 
-    
-    
+
     public static string SetStyle(string xml, Dictionary<string, string> styleProperties)
     {
         try
@@ -323,7 +452,7 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
 
             //check if main (<svg> node) has style attribute
             var style = main.GetAttribute("style");
-            
+
             var existingProperties = GetStyleProperties(style);
 
             if (existingProperties.Count != 0)
@@ -338,14 +467,14 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
             {
                 existingProperties = styleProperties;
             }
-            
+
             //create new style string
             var styleString = existingProperties.Select(kv => $"{kv.Key}:{kv.Value}").Aggregate((a, b) => $"{a};{b}");
-            
+
             //set the attribute
-            
+
             main.SetAttribute("style", styleString);
-            
+
             var result = doc.WriteSVGXML()!.TrimStart('\uFEFF');
 
             return result;
@@ -356,29 +485,29 @@ public sealed class SvgRasterizationService : ISvgRasterizationService, IDisposa
             return xml;
         }
     }
-    
+
     public static Dictionary<string, string> GetStyleProperties(string attributeString)
     {
         if (string.IsNullOrEmpty(attributeString))
         {
             return new Dictionary<string, string>();
         }
-        
+
         //break down a string of svg style properties into a dictionary
         //e.g. "fill:#000000;stroke:none;stroke-width:1px" => { "fill": "#000000", "stroke": "none", "stroke-width": "1px" }
         var properties = new Dictionary<string, string>();
         var pairs = attributeString.ToLowerInvariant().Split(';', StringSplitOptions.RemoveEmptyEntries);
 
         var returnDict = new Dictionary<string, string>();
-        
+
         foreach (var pair in pairs)
         {
             returnDict.Add(pair.Split(':')[0].Trim(), pair.Split(':')[1].Trim());
         }
-        
+
         return returnDict;
     }
-    
+
     /// <summary>
     /// Walks the resolution hierarchy to find a matching symbol key in the file index.
     /// Priority: prefix+tag → prefix+reversed → tag → reversed.

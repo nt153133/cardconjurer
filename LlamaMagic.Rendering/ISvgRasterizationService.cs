@@ -43,5 +43,9 @@ public interface ISvgRasterizationService
     
 
     Image<Rgba32>? GetStyledVectorSymbol(string symbolKey, int targetSize, Color backgroundColor, Color foregroundColor);
+
+    Image<Rgba32>? GetVectorSymbol(string symbolKey, int targetWidth, int targetHeight);
+
+    Image<Rgba32>? GetManaSymbol(string tagCode, int targetWidth, int targetHeight);
 }
 

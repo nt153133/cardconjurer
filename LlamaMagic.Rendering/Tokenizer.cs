@@ -44,7 +44,7 @@ public static class Tokenizer
         else
         {
             // Standard flavor expansion creates the divider bar and switches to italics
-            text = text.Replace("{flavor}", "{/indent}{lns}{bar}{lns}{fixtextalign}{i}", StringComparison.OrdinalIgnoreCase);
+            text = text.Replace("{flavor}", "{/indent}{lns}{bar}{i}", StringComparison.OrdinalIgnoreCase);
         }
 
         // Old flavor and standard dividers
